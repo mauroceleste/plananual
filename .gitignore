@@ -1,4 +1,4 @@
-﻿bin/
+bin/
 obj/
 .vs/
 publish/
@@ -6,5 +6,4 @@ App_Data/
 *.user
 *.local
 
-db/datos_de_prueba_servidor.sql
 *.rar
