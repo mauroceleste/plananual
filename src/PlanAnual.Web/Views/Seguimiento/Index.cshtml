@@ -1,0 +1,56 @@
+@model SeguimientoVm
+@{ ViewData["Title"] = "Presentaciones"; ViewData["Ancha"] = true;
+   var c = Model.Ciclo; var esAdmin = User.ToSesion().Rol == Rol.Administrador;
+   string Chip(string e) => e switch { "Completa" => "chip--ok", "Parcial" => "chip--warn", "En carga" => "chip--warn", _ => "chip--danger" }; }
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div><span class="page-head__eyebrow">@(c?.Nombre ?? "Plan de Inversiones")</span><h1>Presentaciones</h1>
+            <p>Estado de la carga por empresa. Una empresa está completa cuando envió todas sus áreas.</p></div>
+    </div>
+    @if (Model.ErrorServicio is not null) { <div class="alert alert-danger">@Url.Icono("alert")<div>@Model.ErrorServicio</div></div> }
+
+    @{
+        var total = Model.Empresas.Count;
+        var completas = Model.Empresas.Count(e => e.Estado == "Completa");
+        var parciales = Model.Empresas.Count(e => e.Estado is "Parcial" or "En carga");
+        var sin = Model.Empresas.Count(e => e.Estado == "Sin presentar");
+    }
+    <section class="kpi-grid" aria-label="Indicadores principales">
+        <div class="kpi" style="--acento: var(--nqn-turquesa)"><span class="kpi__icon">@Url.Icono("building")</span><span><span class="kpi__label d-block">Empresas operadoras</span><span class="kpi__value d-block">@total</span></span></div>
+        <div class="kpi" style="--acento: var(--nqn-verde)"><span class="kpi__icon">@Url.Icono("check")</span><span><span class="kpi__label d-block">Completas</span><span class="kpi__value d-block">@completas</span></span></div>
+        <div class="kpi" style="--acento: var(--nqn-amarillo)"><span class="kpi__icon">@Url.Icono("clock")</span><span><span class="kpi__label d-block">Parciales o en carga</span><span class="kpi__value d-block">@parciales</span></span></div>
+        <div class="kpi" style="--acento: var(--nqn-coral)"><span class="kpi__icon">@Url.Icono("alert")</span><span><span class="kpi__label d-block">Sin presentar</span><span class="kpi__value d-block">@sin</span></span></div>
+    </section>
+
+    <div class="table-card"><div class="table-responsive">
+        <table class="table data-table is-cards datos" data-archivo="seguimiento_plan_anual">
+            <thead><tr><th>Empresa</th><th>CUIT</th><th class="text-end">Áreas</th><th class="text-end">Enviadas</th><th class="text-end">En borrador</th><th>Estado</th>@if (esAdmin) {<th data-sin-orden data-sin-exportar></th>}</tr></thead>
+            <tbody>
+            @foreach (var e in Model.Empresas)
+            {
+                <tr><td data-label="Empresa"><span class="t-title">@e.Razon</span></td><td data-label="CUIT" class="t-num">@e.Cuit</td>
+                    <td data-label="Áreas" class="t-num text-end">@e.Bloques</td><td data-label="Enviadas" class="t-num text-end">@e.Enviadas</td><td data-label="En borrador" class="t-num text-end">@e.Borradores</td>
+                    <td data-label="Estado"><span class="chip @Chip(e.Estado)">@e.Estado</span></td>
+                    @if (esAdmin) {<td class="t-actions"><a class="btn btn-ghost btn-sm" asp-controller="Plan" asp-action="Index" asp-route-cuit="@e.Cuit">@Url.Icono("edit") Asistir</a></td>}</tr>
+            }
+            </tbody>
+        </table>
+    </div></div>
+
+    @if (Model.Recientes.Any())
+    {
+        <div class="panel mt-4"><div class="panel__head"><h2 class="panel__title">@Url.Icono("mail") Últimos envíos</h2></div>
+            <div class="table-responsive"><table class="table data-table is-cards">
+                <thead><tr><th>Comprobante</th><th>Empresa</th><th>Área</th><th>Tipo</th><th>Enviada</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var p in Model.Recientes)
+                {
+                    <tr><td data-label="Comprobante" class="t-num">@p.NumeroComprobante</td><td data-label="Empresa">@p.RazonSocial</td>
+                        <td data-label="Área">@(p.NombreArea == p.NombreBloque ? p.NombreArea : p.NombreArea + " - " + p.NombreBloque)</td>
+                        <td data-label="Tipo"><span class="chip chip--tag">@(p.TipoPlan == TipoPlan.Cench ? "CENCH" : "Convencional")</span></td>
+                        <td data-label="Enviada">@Formato.Fecha(p.EnviadaEn)</td>
+                        <td class="t-actions"><a class="btn btn-ghost btn-sm" asp-controller="Plan" asp-action="Comprobante" asp-route-id="@p.Id">Ver</a></td></tr>
+                }
+                </tbody></table></div></div>
+    }
+</div>

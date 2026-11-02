@@ -1,0 +1,28 @@
+@model List<PlanAnual.Web.Controllers.EmpresaItem>
+@{ ViewData["Title"] = "Ingreso de desarrollo"; }
+<div class="container-xl py-5" style="max-width:640px">
+    <div class="panel section-gap">
+        <div class="page-head"><div><span class="page-head__eyebrow">Entorno de desarrollo</span><h1>Ingresar</h1>
+            <p>Esta pantalla solo existe en desarrollo. En producción se entra desde el portal de UsersAccess.</p></div></div>
+        <form asp-action="LoginDesarrollo" method="post" data-una-vez class="row g-3">
+            <div class="col-12"><label class="form-label" for="rol">Perfil</label>
+                <select class="form-select" id="rol" name="rol">
+                    <option value="@((int)Rol.Empresa)">Empresa operadora</option>
+                    <option value="@((int)Rol.Subsecretaria)">Subsecretaría (consulta y tablero)</option>
+                    <option value="@((int)Rol.Administrador)">Administrador</option>
+                </select></div>
+            <div class="col-12" id="grupo-empresa"><label class="form-label" for="cuit">Empresa</label>
+                <select class="form-select" id="cuit" name="cuit">
+                    @foreach (var e in Model) { <option value="@e.Cuit">@e.Razon (@e.Bloques @(e.Bloques == 1 ? "bloque" : "bloques"))</option> }
+                </select></div>
+            <div class="col-12"><label class="form-label" for="email">Mail del usuario</label>
+                <input class="form-control" id="email" name="email" type="email" placeholder="prueba@example.com" />
+                <div class="form-text">Se usa para el comprobante. Con el modo de prueba de mail activo, nunca sale a esta casilla.</div></div>
+            <div class="col-12"><button class="btn btn-primary">@Url.Icono("key") Ingresar</button></div>
+        </form>
+    </div>
+</div>
+@section Scripts {<script>
+  var r=document.getElementById('rol'),g=document.getElementById('grupo-empresa');
+  function aj(){g.style.display=r.value==='@((int)Rol.Empresa)'?'':'none'} r.addEventListener('change',aj); aj();
+</script>}

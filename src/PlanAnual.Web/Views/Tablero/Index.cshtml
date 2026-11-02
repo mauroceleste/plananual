@@ -1,0 +1,338 @@
+@using System.Text.Json
+@model TableroVm
+@{
+    ViewData["Title"] = "Tablero"; ViewData["Ancha"] = true;
+    var d = Model.Datos;
+    var json = d is null ? "null" : JsonSerializer.Serialize(d, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    var ind = d?.Indicadores;
+    string Fmt(decimal v, int dec = 1) => v.ToString("N" + dec, Formato.AR);
+    string Num(decimal? v, int dec = 1) => v is { } x ? Fmt(x, dec) : "–";
+    string Pct(decimal? v) => v is { } x ? Fmt(x, 1) + " %" : "–";
+    string Delta(decimal? v) => v is { } x ? (x > 0 ? "+" : "") + Fmt(x, 1) + " %" : "–";
+    Microsoft.AspNetCore.Html.IHtmlContent Tile(string etiqueta, string valor, string nota, string acento)
+    {
+        Func<string, string> e = System.Net.WebUtility.HtmlEncode;
+        return new Microsoft.AspNetCore.Html.HtmlString(
+            $"<div class=\"stat\" style=\"--acento: {acento}\"><div class=\"stat__label\">{e(etiqueta)}</div><div class=\"stat__value\">{e(valor)}</div><div class=\"stat__foot\">{e(nota)}</div></div>");
+    }
+    string PaybackTexto(IndicadoresTablero i) => i.PaybackEstado switch
+    {
+        "Recupera" => i.PaybackAnio.ToString()!,
+        "NoRecupera" => "No recupera",
+        "SinDeficit" => "Sin déficit",
+        _ => "–"
+    };
+    string PaybackNota(IndicadoresTablero i) => i.PaybackEstado switch
+    {
+        "Recupera" => "año en que el flujo acumulado pasa a positivo",
+        "NoRecupera" => "dentro del horizonte mostrado",
+        "SinDeficit" => "el flujo nunca fue negativo",
+        _ => "faltan datos"
+    };
+    string HhiTexto(decimal h) => h <= 0 ? "sin datos" : h < 1500 ? "repartida" : h <= 2500 ? "moderada" : "concentrada";
+    string UsoNota(IndicadoresTablero i) => i.AreasConCapacidad == 0 ? "ninguna área declaró capacidad"
+        : i.AreasSobreCapacidad + " de " + i.AreasConCapacidad + " áreas por encima de su capacidad";
+    string AbandonoNota(IndicadoresTablero i) => Fmt(i.AbandonoUsdHorizonte, 1) + " MMUSD" + (i.AbandonoPctInversion is { } p ? " · " + Fmt(p, 1) + " % de la inversión" : "");
+}
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div><span class="page-head__eyebrow">@(Model.Ciclo?.Nombre ?? "Plan de Inversiones")</span><h1>Tablero</h1>
+            <p>Lo que las empresas se comprometieron a invertir, perforar y producir. Cuenta la última versión enviada de cada área.</p></div>
+        <a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index">@Url.Icono("clock") Estado de presentaciones</a>
+    </div>
+
+    @if (Model.Ciclo is null) { <div class="alert alert-warning">@Url.Icono("alert")<div>No hay una convocatoria abierta.</div></div> }
+    else if (Model.ErrorServicio is not null) { <div class="alert alert-danger">@Url.Icono("alert")<div>@Model.ErrorServicio</div></div> }
+    else if (d is not null)
+    {
+        <form method="get" class="filtros-tablero" id="filtros" aria-label="Filtros del tablero">
+            <div><label for="tipo">Tipo de plan</label>
+                <select class="form-select" id="tipo" name="tipo">
+                    <option value="">Todos</option>
+                    <option value="@((int)TipoPlan.Convencional)" selected="@(Model.Tipo == TipoPlan.Convencional)">Convencional</option>
+                    <option value="@((int)TipoPlan.Cench)" selected="@(Model.Tipo == TipoPlan.Cench)">CENCH (no convencional)</option>
+                </select></div>
+            <div><label for="cuit">Empresa</label>
+                <select class="form-select" id="cuit" name="cuit">
+                    <option value="">Todas</option>
+                    @foreach (var e in Model.Empresas) { <option value="@e.Cuit" selected="@(Model.Cuit == e.Cuit)">@e.Razon</option> }
+                </select></div>
+            <div><label for="anios">Años a mostrar</label>
+                <select class="form-select" id="anios" name="anios">
+                    <option value="5" selected="@(Model.Anios == 5)">5 años</option>
+                    <option value="10" selected="@(Model.Anios == 10)">10 años</option>
+                    <option value="15" selected="@(Model.Anios == 15)">15 años</option>
+                    <option value="0" selected="@(Model.Anios == 0)">Todos los cargados</option>
+                </select></div>
+            @if (Model.Tipo is not null || Model.Cuit is not null) { <a class="btn btn-ghost btn-sm" asp-action="Index">Quitar filtros</a> }
+        </form>
+
+        @if (d.Presentaciones == 0)
+        {
+            <div class="alert alert-info">@Url.Icono("info")<div>Todavía no hay presentaciones enviadas@(Model.Tipo is not null || Model.Cuit is not null ? " con estos filtros" : ""). Los gráficos se completan a medida que las empresas envían.</div></div>
+        }
+
+        <div class="tablero-top">
+            <div class="cifra">
+                <div class="cifra__label">Inversión comprometida @d.AnioFirme (firme)</div>
+                <div class="cifra__value">@Fmt(d.InversionFirme)<small>MMUSD</small></div>
+                <div class="cifra__hint">@Fmt(d.InversionPeriodo, 0) MMUSD proyectados @d.AnioFirme–@d.UltimoAnio · @d.Presentaciones @(d.Presentaciones == 1 ? "área" : "áreas")</div>
+            </div>
+            <div class="stat-row">
+                <div class="stat" style="--acento: var(--chart-1)"><div class="stat__label">Pozos a perforar @d.AnioFirme</div><div class="stat__value">@Fmt(d.PozosFirme, 0)</div><div class="stat__foot">@Fmt(d.AbandonosFirme, 0) a abandonar</div></div>
+                <div class="stat" style="--acento: var(--chart-2)"><div class="stat__label">Petróleo @d.AnioFirme</div><div class="stat__value">@Fmt(d.PetroleoFirme, 2)</div><div class="stat__foot">MMbbl</div></div>
+                <div class="stat" style="--acento: var(--nqn-turquesa)"><div class="stat__label">Gas @d.AnioFirme</div><div class="stat__value">@Fmt(d.GasFirme, 1)</div><div class="stat__foot">MMm3</div></div>
+                <div class="stat" style="--acento: var(--nqn-verde)"><div class="stat__label">Áreas enviadas</div><div class="stat__value">@d.AreasEnviadas<small class="text-muted"> / @d.AreasTotales</small></div><div class="stat__foot">@d.AreasEnBorrador en borrador</div></div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs tablero-tabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="t-resumen" data-bs-toggle="tab" data-bs-target="#tab-resumen" type="button" role="tab" aria-controls="tab-resumen" aria-selected="true">Resumen</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="t-fiscal" data-bs-toggle="tab" data-bs-target="#tab-fiscal" type="button" role="tab" aria-controls="tab-fiscal" aria-selected="false">Fiscal y economía</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="t-operacion" data-bs-toggle="tab" data-bs-target="#tab-operacion" type="button" role="tab" aria-controls="tab-operacion" aria-selected="false">Operación</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="t-calidad" data-bs-toggle="tab" data-bs-target="#tab-calidad" type="button" role="tab" aria-controls="tab-calidad" aria-selected="false">Calidad y cumplimiento</button></li>
+        </ul>
+        <div class="tab-content tablero-panes">
+        <div class="tab-pane fade show active" id="tab-resumen" role="tabpanel" aria-labelledby="t-resumen" tabindex="0">
+        <div class="tablero-grid">
+            <section class="chart-card chart-card--wide" data-chart-card>
+                <div class="chart-card__head"><div><h2>Inversión por año y tipo de plan</h2><p class="chart-card__sub">MMUSD, @d.AnioFirme–@d.UltimoAnio. CENCH es no convencional. El primer año es compromiso firme; los siguientes son proyección.</p></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                <div data-chart="inversion-anio"></div>
+            </section>
+            <section class="chart-card" data-chart-card>
+                <div class="chart-card__head"><div><h2>En qué se invierte en @d.AnioFirme</h2><p class="chart-card__sub">MMUSD por rubro</p></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                <div data-chart="inversion-rubro"></div>
+            </section>
+            <section class="chart-card" data-chart-card>
+                <div class="chart-card__head"><div><h2>Quién invierte más en @d.AnioFirme</h2><p class="chart-card__sub">MMUSD por empresa, las 8 principales</p></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                <div data-chart="inversion-empresa"></div>
+            </section>
+            <section class="chart-card chart-card--third" data-chart-card>
+                <div class="chart-card__head"><div><h2>Pozos por año</h2><p class="chart-card__sub">Perforados y a abandonar</p></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                <div data-chart="pozos"></div>
+            </section>
+            <section class="chart-card chart-card--third" data-chart-card>
+                <div class="chart-card__head"><div><h2>Producción de petróleo</h2><p class="chart-card__sub">MMbbl por año</p></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                <div data-chart="petroleo"></div>
+            </section>
+            <section class="chart-card chart-card--third" data-chart-card>
+                <div class="chart-card__head"><div><h2>Producción de gas</h2><p class="chart-card__sub">MMm3 por año</p></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                <div data-chart="gas"></div>
+            </section>
+            <section class="chart-card chart-card--wide" data-chart-card>
+                <div class="chart-card__head"><div><h2>Cumplimiento de las empresas</h2><p class="chart-card__sub">Una empresa está completa cuando envió todas sus áreas.</p></div></div>
+                <div data-chart="cumplimiento"></div>
+            </section>
+        </div>
+
+        <div class="panel">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("building") Empresas con presentaciones enviadas</h2></div>
+            @if (!d.Empresas.Any()) { <p class="text-muted mb-0">Ninguna todavía.</p> }
+            else
+            {
+                <div class="table-responsive"><table class="table data-table is-cards datos" data-archivo="tablero_empresas">
+                    <thead><tr><th>Empresa</th><th class="text-end">Áreas enviadas</th><th class="text-end">Inversión @d.AnioFirme (MMUSD)</th><th class="text-end">Pozos @d.AnioFirme</th><th class="text-end">Petróleo @d.AnioFirme (MMbbl)</th></tr></thead>
+                    <tbody>
+                    @foreach (var e in d.Empresas)
+                    {
+                        <tr><td data-label="Empresa"><span class="t-title">@e.Razon</span></td><td data-label="Áreas enviadas" class="t-num text-end">@e.Areas</td>
+                            <td data-label="Inversión" class="t-num text-end">@Fmt(e.InversionFirme)</td><td data-label="Pozos" class="t-num text-end">@Fmt(e.PozosFirme, 0)</td>
+                            <td data-label="Petróleo" class="t-num text-end">@Fmt(e.PetroleoFirme, 2)</td></tr>
+                    }
+                    </tbody></table></div>
+            }
+        </div>
+        </div>
+
+        @if (ind is not null)
+        {
+            var firme = d.AnioFirme;
+            <div class="tab-pane fade" id="tab-fiscal" role="tabpanel" aria-labelledby="t-fiscal" tabindex="0">
+                <div class="stat-row stat-row--ind">
+                    @Tile("Renta fiscal", Pct(ind.RentaFiscalPct), "regalías + IIBB, % de ingresos " + firme + "–" + d.UltimoAnio, "var(--chart-1)")
+                    @Tile("Carga fiscal total", Pct(ind.CargaFiscalPct), "con Ganancias, % de ingresos", "var(--chart-2)")
+                    @Tile("Reinversión", Pct(ind.ReinversionPct), "inversión sobre ingresos", "var(--nqn-turquesa)")
+                    @Tile("Recupero de la inversión", PaybackTexto(ind), PaybackNota(ind), "var(--nqn-verde)")
+                    @Tile("Top 3 empresas", Pct(ind.Top3Pct), "de la inversión " + firme + " · top 5: " + Pct(ind.Top5Pct), "var(--chart-1)")
+                    @Tile("Concentración (HHI)", Fmt(ind.Hhi, 0), HhiTexto(ind.Hhi), "var(--chart-2)")
+                </div>
+                <div class="tablero-grid">
+                    <section class="chart-card" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Ingresos, inversión y renta fiscal</h2><p class="chart-card__sub">MMUSD por año, suma de todas las áreas.</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="ingresos-renta"></div>
+                    </section>
+                    <section class="chart-card" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Flujo de fondos acumulado</h2><p class="chart-card__sub">MMUSD. Por debajo de cero, el proyecto todavía no recuperó lo invertido.</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="flujo-acumulado"></div>
+                    </section>
+                    <section class="chart-card" data-chart-card>
+                        <div class="chart-card__head"><div><h2>CENCH y convencional</h2><p class="chart-card__sub">Cuánto aporta cada tipo de plan, @firme–@d.UltimoAnio.</p></div></div>
+                        <div data-chart="mix"></div>
+                    </section>
+                    <section class="chart-card" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Si cambia el precio del petróleo</h2><p class="chart-card__sub">Solo se mueve el precio del barril; el resto queda como lo declararon. @firme–@d.UltimoAnio, MMUSD.</p></div></div>
+                        <div class="table-responsive"><table class="table data-table sens">
+                            <thead><tr><th>Precio</th><th class="text-end">Ingresos</th><th class="text-end">Renta fiscal</th><th class="text-end">Flujo de fondos</th></tr></thead>
+                            <tbody>
+                            @foreach (var e in ind.Sensibilidad)
+                            {
+                                <tr class="@(e.PctPrecioPetroleo == 0 ? "is-base" : null)"><th scope="row">@(e.PctPrecioPetroleo == 0 ? "Declarado" : (e.PctPrecioPetroleo > 0 ? "+" : "") + e.PctPrecioPetroleo + " %")</th>
+                                    <td class="t-num text-end">@Fmt(e.Ingresos, 0)</td><td class="t-num text-end">@Fmt(e.RentaFiscal, 0)</td><td class="t-num text-end">@Fmt(e.FlujoFondos, 0)</td></tr>
+                            }
+                            </tbody></table></div>
+                    </section>
+                    <section class="chart-card chart-card--wide" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Inversión por empresa y año</h2><p class="chart-card__sub">MMUSD. Más oscuro, más inversión. Las 12 empresas que más invierten; el resto va junto.</p></div></div>
+                        <div data-chart="mapa"></div>
+                    </section>
+                </div>
+                <details class="como-se-calcula"><summary>Cómo se calcula</summary>
+                    <ul>
+                        <li><strong>Renta fiscal:</strong> regalías más Ingresos Brutos y otros impuestos declarados, sobre los ingresos. <strong>Carga fiscal total</strong> suma además Ganancias.</li>
+                        <li><strong>Reinversión:</strong> inversión del período dividida por los ingresos del mismo período.</li>
+                        <li><strong>Recupero:</strong> primer año en que el flujo de fondos acumulado pasa de negativo a positivo.</li>
+                        <li><strong>HHI:</strong> suma de los cuadrados de la participación de cada empresa en la inversión @firme. Hasta 1.500 es una oferta repartida, de 1.500 a 2.500 moderada y más de 2.500 concentrada.</li>
+                        <li><strong>Precio del petróleo:</strong> se cambia el precio de las ventas de petróleo; regalías e Ingresos Brutos acompañan al ingreso y Ganancias se estima con una tasa de @((Indicadores.TasaGananciasEstimada * 100).ToString("0", Formato.AR)) % sobre la diferencia. Es una referencia, no una proyección.</li>
+                        <li>Los números salen de lo que cada empresa declaró. Nada acá está auditado.</li>
+                    </ul></details>
+            </div>
+
+            <div class="tab-pane fade" id="tab-operacion" role="tabpanel" aria-labelledby="t-operacion" tabindex="0">
+                <div class="stat-row stat-row--ind">
+                    @Tile("Petróleo por día " + firme, Fmt(ind.PetroleoKbbldFirme, 1), "mil barriles por día", "var(--chart-1)")
+                    @Tile("Gas por día " + firme, Fmt(ind.GasMMm3dFirme, 2), "MMm3 por día", "var(--chart-2)")
+                    @Tile("Pozos sin conectar", Fmt(ind.SinConectarFirme, 0), "perforados menos conectados en " + firme, "var(--nqn-turquesa)")
+                    @Tile("Pozos por equipo", Num(ind.PozosPorEquipo, 1), "perforados por equipo en " + firme, "var(--nqn-verde)")
+                    @Tile("Etapas por pozo", Num(ind.EtapasPorPozo, 1), "fracturas por pozo perforado (CENCH)", "var(--chart-1)")
+                    @Tile("Uso de la capacidad", Pct(ind.UtilizacionFirmePct), UsoNota(ind), "var(--chart-2)")
+                    @Tile("Inversión por pozo", Num(ind.CapexPorPozoFirme, 2), "MMUSD por pozo perforado en " + firme, "var(--nqn-turquesa)")
+                    @Tile("Gastos por boe", Num(ind.OpexPorBoeFirme, 2), "USD por boe producido en " + firme, "var(--nqn-verde)")
+                    @Tile("Salarios " + firme, Fmt(ind.SalariosFirme, 1), "MMUSD · " + Pct(ind.SalariosPctGastosFirme) + " de los gastos · " + Num(ind.SalariosPorBoeFirme, 2) + " USD por boe", "var(--chart-2)")
+                    @Tile("Abandono de pozos", Fmt(ind.AbandonoPozosHorizonte, 0), AbandonoNota(ind), "var(--chart-muted)")
+                    @Tile("Relación gas/petróleo", Num(ind.GorFirme, 0), "m3 de gas por m3 de petróleo en " + firme, "var(--chart-1)")
+                </div>
+                <div class="tablero-grid">
+                    <section class="chart-card chart-card--third" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Petróleo por día</h2><p class="chart-card__sub">Miles de barriles por día</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="petroleo-dia"></div>
+                    </section>
+                    <section class="chart-card chart-card--third" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Gas por día</h2><p class="chart-card__sub">MMm3 por día</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="gas-dia"></div>
+                    </section>
+                    <section class="chart-card chart-card--third" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Pozos sin conectar</h2><p class="chart-card__sub">Acumulado: perforados que todavía no producen</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="sin-conectar"></div>
+                    </section>
+                    <section class="chart-card" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Relación gas/petróleo (GOR)</h2><p class="chart-card__sub">m3 de gas por m3 de petróleo. Si sube, el yacimiento madura hacia el gas.</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="gor"></div>
+                    </section>
+                    <section class="chart-card" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Relación agua/petróleo (WOR)</h2><p class="chart-card__sub">m3 de agua por m3 de petróleo. Si sube, hay más agua para tratar.</p></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-ver-tabla aria-pressed="false">Ver tabla</button></div>
+                        <div data-chart="wor"></div>
+                    </section>
+                </div>
+                <details class="como-se-calcula"><summary>Cómo se calcula</summary>
+                    <ul>
+                        <li><strong>Por día:</strong> producción anual dividida 365. Petróleo en miles de barriles por día; gas en millones de m3 por día.</li>
+                        <li><strong>Uso de la capacidad:</strong> petróleo por día de las áreas que declararon capacidad de procesamiento, sobre esa capacidad. Más de 100 % indica que la planilla promete producir más de lo que puede procesar.</li>
+                        <li><strong>Gastos por boe:</strong> gastos operativos declarados sobre petróleo más gas en barriles equivalentes (1.000 m3 de gas ≈ 6,3 boe).</li>
+                        <li><strong>Salarios:</strong> es el gasto en salarios que declaran las empresas. Sirve de referencia del empleo, pero no cuenta personas: las planillas todavía no piden dotación.</li>
+                        <li><strong>GOR y WOR:</strong> volúmenes de gas y agua sobre el petróleo producido, en m3 (1 MMbbl = 0,159 MMm3).</li>
+                        <li><strong>Pozos sin conectar:</strong> perforados menos conectados, acumulado año a año desde cero: no incluye pozos de campañas anteriores, por eso puede dar negativo si se conectan más de los que se perforan.</li>
+                        <li><strong>Abandono:</strong> pozos a abandonar y dólares reservados en @firme–@d.UltimoAnio; el porcentaje es sobre la inversión del mismo período.</li>
+                    </ul></details>
+            </div>
+
+            <div class="tab-pane fade" id="tab-calidad" role="tabpanel" aria-labelledby="t-calidad" tabindex="0">
+                @{ var cu = ind.Cumplimiento; }
+                <div class="stat-row stat-row--ind">
+                    @Tile("Presentadas en plazo", cu.Enviadas > 0 ? cu.EnPlazo + " / " + cu.Enviadas : "–", cu.FueraDePlazo + " fuera de plazo", "var(--nqn-verde)")
+                    @Tile("Demora promedio", cu.FueraDePlazo > 0 ? Fmt(cu.DemoraPromedioDias, 1) + " días" : "–", "máxima " + cu.DemoraMaximaDias + " días, contra el vencimiento vigente", "var(--chart-2)")
+                    @Tile("Rectificatorias", cu.Rectificatorias.ToString(), "versiones enviadas después de la primera", "var(--chart-1)")
+                    @Tile("Anexos recomendados", cu.ConAnexosRecomendadosCompletos + " / " + cu.Enviadas, "áreas con todos los anexos recomendados", "var(--nqn-turquesa)")
+                    @Tile("Con advertencias", cu.ConAdvertenciasDeDatos.ToString(), "áreas con datos que conviene revisar", "var(--st-warn)")
+                </div>
+                <div class="tablero-grid">
+                    <section class="chart-card chart-card--wide" data-chart-card>
+                        <div class="chart-card__head"><div><h2>Presentaciones según plazo</h2><p class="chart-card__sub">Áreas enviadas, contra el vencimiento (con prórroga si la hay).</p></div></div>
+                        <div data-chart="plazo"></div>
+                    </section>
+                </div>
+                <div class="panel">
+                    <div class="panel__head"><h2 class="panel__title">@Url.Icono("alert") Datos para revisar</h2></div>
+                    @if (!ind.Alertas.Any()) { <p class="text-muted mb-0">Ninguna planilla enviada tiene advertencias de datos.</p> }
+                    else
+                    {
+                        <div class="table-responsive"><table class="table data-table is-cards datos" data-archivo="tablero_alertas">
+                            <thead><tr><th>Empresa</th><th>Área</th><th class="text-end">Advertencias</th><th>Ejemplo</th></tr></thead>
+                            <tbody>
+                            @foreach (var a in ind.Alertas)
+                            {
+                                <tr><td data-label="Empresa"><span class="t-title">@a.Empresa</span></td><td data-label="Área">@a.Area</td><td data-label="Advertencias" class="t-num text-end">@a.Cantidad</td><td data-label="Ejemplo">@a.Ejemplo</td></tr>
+                            }
+                            </tbody></table></div>
+                        @if (ind.Alertas.Count < cu.ConAdvertenciasDeDatos) { <p class="text-muted small mt-2 mb-0">Se muestran las @ind.Alertas.Count con más advertencias, de @cu.ConAdvertenciasDeDatos.</p> }
+                    }
+                </div>
+                <div class="panel">
+                    <div class="panel__head"><h2 class="panel__title">@Url.Icono("search") Valores que se alejan de sus pares</h2></div>
+                    @if (!ind.Atipicos.Any()) { <p class="text-muted mb-0">Ningún área se aleja mucho de las demás de su mismo tipo.</p> }
+                    else
+                    {
+                        <div class="table-responsive"><table class="table data-table is-cards datos" data-archivo="tablero_atipicos">
+                            <thead><tr><th>Empresa</th><th>Área</th><th>Indicador</th><th class="text-end">Valor</th><th class="text-end">Mediana</th><th class="text-end">Veces</th></tr></thead>
+                            <tbody>
+                            @foreach (var a in ind.Atipicos)
+                            {
+                                <tr><td data-label="Empresa"><span class="t-title">@a.Empresa</span></td><td data-label="Área">@a.Area</td><td data-label="Indicador">@a.Metrica (@a.Unidad)</td>
+                                    <td data-label="Valor" class="t-num text-end">@Fmt(a.Valor, 2)</td><td data-label="Mediana" class="t-num text-end">@Fmt(a.Mediana, 2)</td>
+                                    <td data-label="Veces" class="t-num text-end">@(a.MasAlto ? "×" : "÷")@Fmt(a.Veces, 1)</td></tr>
+                            }
+                            </tbody></table></div>
+                        <p class="text-muted small mt-2 mb-0">No son errores: son áreas a mirar con más atención. Se marcan cuando el valor es el doble (o la mitad) de lo habitual en su tipo de plan.</p>
+                    }
+                </div>
+                <div class="panel">
+                    <div class="panel__head"><h2 class="panel__title">@Url.Icono("clock") Cambios entre versiones</h2></div>
+                    @if (!ind.Cambios.Any()) { <p class="text-muted mb-0">Ningún área presentó una versión rectificatoria.</p> }
+                    else
+                    {
+                        <div class="table-responsive"><table class="table data-table is-cards datos" data-archivo="tablero_cambios">
+                            <thead><tr><th>Empresa</th><th>Área</th><th class="text-end">Versión</th><th class="text-end">Inversión antes</th><th class="text-end">Inversión ahora</th><th class="text-end">Cambio inversión</th><th class="text-end">Cambio petróleo</th></tr></thead>
+                            <tbody>
+                            @foreach (var c in ind.Cambios)
+                            {
+                                <tr><td data-label="Empresa"><span class="t-title">@c.Empresa</span></td><td data-label="Área">@c.Area</td><td data-label="Versión" class="t-num text-end">@c.VersionNueva</td>
+                                    <td data-label="Antes" class="t-num text-end">@Fmt(c.InversionAntes)</td><td data-label="Ahora" class="t-num text-end">@Fmt(c.InversionDespues)</td>
+                                    <td data-label="Cambio inversión" class="t-num text-end">@Delta(c.InversionDeltaPct)</td><td data-label="Cambio petróleo" class="t-num text-end">@Delta(c.PetroleoDeltaPct)</td></tr>
+                            }
+                            </tbody></table></div>
+                    }
+                </div>
+            </div>
+        }
+        </div>
+
+        <script type="application/json" id="tablero-datos">@Html.Raw(json)</script>
+    }
+</div>
+
+@section Scripts {
+    <script src="~/js/charts.js" asp-append-version="true"></script>
+    <script src="~/js/tablero.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,38 @@
+@model List<FilaTipo>
+@{ ViewData["Title"] = "Tipo de actividad"; ViewData["Ancha"] = true; }
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div><span class="page-head__eyebrow">Administración</span><h1>Tipo de actividad por área</h1>
+            <p>Qué planilla carga cada área (Convencional o CENCH). Rige lo que fijes acá; si dejás "Usar el de Legajos", rige lo que informe el servicio de Legajos de Áreas cuando publique este dato.</p></div>
+    </div>
+    @{ var sinTipo = Model.Count(f => f.Vigente is null);
+       var desdeLegajos = Model.Count(f => f.SegunLegajos is not null);
+       string Nom(TipoPlan? t) => t switch { TipoPlan.Cench => "CENCH", TipoPlan.Convencional => "Convencional", _ => "—" }; }
+    @if (sinTipo > 0) { <div class="alert alert-warning">@Url.Icono("alert")<div>Hay <strong>@sinTipo</strong> áreas sin tipo definido: sus empresas no pueden comenzar la carga.</div></div> }
+    @if (desdeLegajos == 0) { <div class="alert alert-info">@Url.Icono("info")<div>El servicio de Legajos de Áreas todavía no informa el tipo de actividad. Hasta que lo haga, se define acá a mano.</div></div> }
+    <div class="table-card"><div class="table-responsive">
+        <table class="table data-table is-cards datos" data-archivo="tipo_actividad_areas">
+            <thead><tr><th>Operadora</th><th>Área</th><th>Código</th><th>Según Legajos</th><th>Rige</th><th>Fijar a mano</th></tr></thead>
+            <tbody>
+            @foreach (var f in Model)
+            {
+                <tr>
+                    <td data-label="Operadora">@f.Bloque.RazonSocial</td>
+                    <td data-label="Área"><span class="t-title">@f.Bloque.Nombre</span></td>
+                    <td data-label="Código" class="t-num">@f.Bloque.IdNqn</td>
+                    <td data-label="Según Legajos">@Nom(f.SegunLegajos)</td>
+                    <td data-label="Rige">@if (f.Vigente is null) { <span class="chip chip--danger">Sin definir</span> } else { <span class="chip chip--tag">@Nom(f.Vigente)</span> }</td>
+                    <td data-label="Fijar a mano"><form asp-action="GuardarTipo" method="post" class="d-flex gap-2 align-items-center" data-una-vez>
+                        <input type="hidden" name="idBloque" value="@f.Bloque.IdBloque" />
+                        <select name="tipo" class="form-select form-select-sm" aria-label="Tipo de plan de @f.Bloque.Nombre">
+                            <option value="" selected="@(f.Tipo is null)">Usar el de Legajos</option>
+                            <option value="@((int)TipoPlan.Convencional)" selected="@(f.Tipo == TipoPlan.Convencional)">Convencional</option>
+                            <option value="@((int)TipoPlan.Cench)" selected="@(f.Tipo == TipoPlan.Cench)">CENCH (no convencional)</option>
+                        </select>
+                        <button class="btn btn-outline-secondary btn-sm">Guardar</button></form></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div></div>
+</div>

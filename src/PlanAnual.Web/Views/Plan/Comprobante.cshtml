@@ -1,0 +1,41 @@
+@model ComprobanteVm
+@{ var p = Model.P; var asiste = User.ToSesion().EsAsistencia(p.Cuit); ViewData["Title"] = "Comprobante " + p.NumeroComprobante; ViewData["Ancha"] = true;
+   string Nom(string cod) => CatalogoCampos.Buscar(p.TipoPlan, cod)?.Nombre ?? cod; }
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div><span class="page-head__eyebrow">@p.Ciclo!.Nombre</span><h1>@p.NombreArea@(p.NombreArea == p.NombreBloque ? "" : " - " + p.NombreBloque)</h1>
+            <p>@p.RazonSocial</p></div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" asp-action="Exportar" asp-route-id="@p.Id">@Url.Icono("download") Descargar Excel</a>
+            <a class="btn btn-outline-secondary" asp-action="Index" asp-route-cuit="@(asiste ? p.Cuit : null)">@Url.Icono("arrow-left") @(asiste ? "Áreas de la empresa" : "Mis áreas")</a>
+        </div>
+    </div>
+    <div class="stat-row">
+        <div class="stat" style="--acento: var(--nqn-verde)"><div class="stat__label">Comprobante</div><div class="stat__value" style="font-size:1.15rem">@p.NumeroComprobante</div><div class="stat__foot">@(p.Estado == EstadoPresentacion.Reemplazada ? "Reemplazada por una versión posterior" : "Versión vigente")</div></div>
+        <div class="stat" style="--acento: var(--nqn-turquesa)"><div class="stat__label">Enviada</div><div class="stat__value" style="font-size:1.15rem">@Formato.Fecha(p.EnviadaEn)</div><div class="stat__foot">por @(p.EnviadaPor ?? p.UsuarioNombre)</div></div>
+        <div class="stat" style="--acento: var(--nqn-amarillo)"><div class="stat__label">Años cubiertos</div><div class="stat__value">@p.AnioDesde–@p.AnioHasta</div><div class="stat__foot">@p.Anexos.Count anexos adjuntos</div></div>
+        <div class="stat" style="--acento: var(--azul-500)"><div class="stat__label">Huella SHA-256</div><div class="stat__value" style="font-size:.85rem;word-break:break-all">@p.HuellaEnvio</div><div class="stat__foot">prueba de integridad de lo enviado</div></div>
+    </div>
+    @if (p.AsistidaPor is not null) { <div class="alert alert-secondary">@Url.Icono("user")<div>Cargada con asistencia de Administración (<strong>@p.AsistidaPor</strong>), en nombre de la empresa.</div></div> }
+    @if (p.Observaciones is not null) { <div class="alert alert-warning">@Url.Icono("alert")<div>@p.Observaciones</div></div> }
+    @if (Model.Mail is { } m)
+    {
+        <div class="alert @(m.Enviado ? "alert-info" : "alert-warning")">@Url.Icono("mail")<div>@(m.Enviado ? "Se envió el aviso por mail a: " + m.Destinatarios : "No se pudo enviar el aviso por mail (" + m.Error + "). La presentación quedó registrada igual.")</div></div>
+    }
+    <div class="panel"><div class="panel__head"><h2 class="panel__title">@Url.Icono("chart") Resumen por año</h2></div>
+        <div class="table-responsive"><table class="table data-table">
+            <thead><tr><th>Año</th><th class="text-end">@Nom("pozos_perforados")</th><th class="text-end">@Nom("inv_total") (MMUSD)</th><th class="text-end">@Nom("prod_petroleo") (MMbbl)</th><th class="text-end">@Nom("prod_gas") (MMm3)</th><th class="text-end">@Nom("flujo_fondos") (MMUSD)</th></tr></thead>
+            <tbody>
+            @foreach (var (anio, f) in Model.Calc)
+            {
+                <tr><td class="t-num"><strong>@anio</strong>@(anio == p.Ciclo.Anio ? " · firme" : "")</td>
+                    <td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("pozos_perforados"))</td><td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("inv_total"))</td>
+                    <td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("prod_petroleo"))</td><td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("prod_gas"))</td>
+                    <td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("flujo_fondos"))</td></tr>
+            }
+            </tbody></table></div></div>
+    <div class="panel mt-4"><div class="panel__head"><h2 class="panel__title">@Url.Icono("paperclip") Anexos</h2></div>
+        @if (!p.Anexos.Any()) { <p class="text-muted mb-0">No se adjuntaron anexos.</p> }
+        else { <div class="file-list">@foreach (var a in p.Anexos) { <a class="file-card" asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@Url.Icono("file")<span><strong>@a.NombreArchivo</strong><br /><small class="text-muted">@(AnexosRequeridos.Buscar(a.Tipo)?.Nombre) · @(a.Tamano / 1024) KB</small></span></a> }</div> }
+    </div>
+</div>

@@ -1,0 +1,198 @@
+@model EditarVm
+@{
+    var p = Model.P;
+    var paso = Model.Actual;
+    var ro = Model.SoloLectura;
+    ViewData["Title"] = p.NombreArea; ViewData["Ancha"] = true;
+    var anioFirme = p.Ciclo!.Anio;
+    var nombreArea = p.NombreArea == p.NombreBloque ? p.NombreArea : p.NombreArea + " - " + p.NombreBloque;
+    var sesion = User.ToSesion();
+    var asiste = sesion.EsAsistencia(p.Cuit);
+}
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div>
+            <span class="page-head__eyebrow">@p.Ciclo.Nombre · @p.RazonSocial</span>
+            <h1>@nombreArea</h1>
+            <p>
+                <span class="chip chip--tag">@(p.TipoPlan == TipoPlan.Cench ? "Plan de Desarrollo CENCH (no convencional)" : "Plan de Desarrollo Convencionales")</span>
+                @if (p.Estado == EstadoPresentacion.Borrador) { <span class="chip chip--warn">Borrador @(p.Version > 1 ? $"· rectificatoria v{p.Version}" : "")</span> }
+                else { <span class="chip chip--ok">Enviada v@(p.Version)</span> }
+            </p>
+        </div>
+        <div class="d-flex flex-column align-items-end gap-2">
+            <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-cuit="@(asiste ? p.Cuit : null)" data-flush>@Url.Icono("arrow-left") @(asiste ? "Áreas de la empresa" : "Mis áreas")</a>
+            @if (!ro) { <span class="guardado" id="estado-guardado" role="status" aria-live="polite">@Url.Icono("check")<span>Los cambios se guardan solos</span></span> }
+        </div>
+    </div>
+
+    @if (asiste && !ro) { <div class="alert alert-info">@Url.Icono("info")<div><strong>Estás asistiendo a @p.RazonSocial</strong> · Lo que cargues y envíes queda registrado a tu nombre.</div></div> }
+    @if (p.AsistidaPor is not null) { <div class="alert alert-secondary">@Url.Icono("user")<div>Esta planilla se cargó con asistencia de Administración (@p.AsistidaPor).</div></div> }
+    @if (ro) { <div class="alert alert-info">@Url.Icono("lock")<div>Esta versión ya fue enviada y no se puede modificar. <a asp-action="Comprobante" asp-route-id="@p.Id">Ver el comprobante</a>.</div></div> }
+
+    <nav class="stepper" aria-label="Pasos del formulario">
+        <ol>
+            @foreach (var s in Model.Pasos)
+            {
+                <li class="@(s.Indice == paso.Indice ? "is-current" : "")">
+                    <a asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@s.Indice" data-flush aria-current="@(s.Indice == paso.Indice ? "step" : null)">
+                        <span class="stepper__n">@(s.Indice + 1)</span><span class="stepper__t">@s.Titulo</span></a>
+                </li>
+            }
+        </ol>
+    </nav>
+
+    @if (paso.Tipo == TipoPaso.Grilla)
+    {
+        <div class="panel">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("layers") @paso.Titulo</h2></div>
+
+            @if (paso.Indice == 0 && !ro)
+            {
+                <form asp-action="Rango" asp-route-id="@p.Id" method="post" class="rango" data-una-vez>
+                    <input type="hidden" name="paso" value="0" />
+                    <label>Años de la planilla: desde <input class="form-control form-control-sm" type="number" name="desde" value="@p.AnioDesde" min="@(anioFirme - 10)" max="@anioFirme" /></label>
+                    <label>hasta <input class="form-control form-control-sm" type="number" name="hasta" value="@p.AnioHasta" min="@anioFirme" max="@(anioFirme + 60)" /></label>
+                    <button class="btn btn-outline-secondary btn-sm">Aplicar</button>
+                    <span class="form-text">Cargá hasta el vencimiento de la concesión. Si achicás el rango se descartan los años que queden afuera.</span>
+                </form>
+            }
+
+            <p class="form-text mb-2">
+                Usá coma para los decimales (ej. 12,5). Podés pegar un bloque copiado desde Excel: se completa a partir de la celda donde estés parado.
+                Las columnas grises se calculan solas.
+            </p>
+
+            <div class="grilla-wrap" tabindex="0" aria-label="Planilla de @paso.Titulo">
+                <table class="grilla" data-guardar="@Url.Action("Guardar", "Plan", new { id = p.Id })" data-ro="@(ro ? "1" : "0")">
+                    <thead>
+                        <tr>
+                            <th class="grilla__anio" scope="col">Año</th>
+                            @foreach (var c in paso.Campos)
+                            {
+                                <th scope="col" class="@(c.EsCalculado ? "is-calc" : "")" title="@c.Ayuda">
+                                    <span class="grilla__nombre">@c.Nombre</span><span class="grilla__unidad">@c.Unidad@(c.EsCalculado ? "" : " · " + ReglasDeDatos.Descripcion(c))</span>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var anio in Model.Anios)
+                        {
+                            <tr data-anio="@anio" class="@(anio == anioFirme ? "es-firme" : "")">
+                                <th scope="row" class="grilla__anio">@anio@if (anio == anioFirme) { <span class="grilla__firme" title="Compromiso firme de cumplimiento">firme</span> }</th>
+                                @foreach (var c in paso.Campos)
+                                {
+                                    var v = Model.Valor(anio, c);
+                                    if (c.EsCalculado)
+                                    {
+                                        <td class="is-calc"><output data-calc="@c.Codigo">@(v is null ? "" : Formato.Num(v, "N2"))</output></td>
+                                    }
+                                    else
+                                    {
+                                        <td><input type="text" inputmode="@(c.DecimalesMax == 0 ? "numeric" : "decimal")" autocomplete="off" spellcheck="false" maxlength="22"
+                                                   data-campo="@c.Codigo" data-dec="@c.DecimalesMax" data-max="@(c.Maximo?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                                                   aria-label="@c.Nombre, @anio" value="@Formato.Num(v)" readonly="@ro" /></td>
+                                    }
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th class="grilla__anio" scope="row">Total</th>
+                            @foreach (var c in paso.Campos)
+                            {
+                                if (EditarVm.Aditivo(c)) { <td class="is-calc"><output data-total="@c.Codigo" data-dec="@c.DecimalesMax"></output></td> } else { <td class="is-calc">—</td> }
+                            }
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    }
+    else if (paso.Tipo == TipoPaso.Anexos)
+    {
+        <div class="panel">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("paperclip") Documentación de respaldo</h2></div>
+            <p class="form-text">Son los puntos que pide la nota. Los marcados como <span class="chip chip--warn">Recomendado</span> no bloquean el envío, pero la Subsecretaría los va a reclamar si faltan. Formatos: PDF, Excel, Word, PowerPoint, imágenes, ZIP, KML.</p>
+            <ul class="anexos">
+                @foreach (var t in AnexosRequeridos.Todos)
+                {
+                    var subidos = p.Anexos.Where(a => a.Tipo == t.Codigo).ToList();
+                    <li>
+                        <div class="anexos__titulo">
+                            <strong>@t.Nombre</strong>
+                            @if (t.Obligatorio) { <span class="chip @(subidos.Any() ? "chip--ok" : "chip--warn")">@(subidos.Any() ? "Presentado" : "Recomendado")</span> }
+                            else if (subidos.Any()) { <span class="chip chip--ok">Presentado</span> }
+                        </div>
+                        @foreach (var a in subidos)
+                        {
+                            <div class="anexos__archivo">
+                                <a asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@Url.Icono("file") @a.NombreArchivo</a>
+                                <small class="text-muted">@(a.Tamano < 1048576 ? (a.Tamano / 1024 + " KB") : ((a.Tamano / 1048576m).ToString("0.0", Formato.AR) + " MB"))</small>
+                                @if (!ro)
+                                {
+                                    <form asp-action="AnexoQuitar" asp-route-id="@p.Id" method="post" data-una-vez data-confirmar="¿Quitar este archivo?" class="d-inline">
+                                        <input type="hidden" name="anexoId" value="@a.Id" /><input type="hidden" name="paso" value="@paso.Indice" />
+                                        <button class="btn btn-ghost-danger btn-sm" title="Quitar">@Url.Icono("trash")</button></form>
+                                }
+                            </div>
+                        }
+                        @if (!ro)
+                        {
+                            <form asp-action="AnexoSubir" asp-route-id="@p.Id" method="post" enctype="multipart/form-data" data-una-vez class="anexos__subir">
+                                <input type="hidden" name="tipo" value="@t.Codigo" /><input type="hidden" name="paso" value="@paso.Indice" />
+                                <input class="form-control form-control-sm" type="file" name="archivo" required aria-label="Archivo para @t.Nombre" />
+                                <button class="btn btn-outline-secondary btn-sm">@Url.Icono("plus") Adjuntar</button>
+                            </form>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+    else
+    {
+        var errores = Model.Observaciones.Where(o => o.EsError).ToList();
+        var avisos = Model.Observaciones.Where(o => !o.EsError).ToList();
+        var firme = Model.Calc.GetValueOrDefault(anioFirme);
+        var totalInv = Model.Calc.Values.Sum(f => f.GetValueOrDefault("inv_total"));
+        <div class="stat-row">
+            <div class="stat" style="--acento: var(--nqn-turquesa)"><div class="stat__label">Inversión @anioFirme (firme)</div><div class="stat__value">@Formato.Num2(firme?.GetValueOrDefault("inv_total"))</div><div class="stat__foot">MMUSD</div></div>
+            <div class="stat" style="--acento: var(--nqn-amarillo)"><div class="stat__label">Inversión @p.AnioDesde–@p.AnioHasta</div><div class="stat__value">@Formato.Num2(totalInv)</div><div class="stat__foot">MMUSD</div></div>
+            <div class="stat" style="--acento: var(--nqn-verde)"><div class="stat__label">Pozos a perforar @anioFirme</div><div class="stat__value">@Formato.Num2(firme?.GetValueOrDefault("pozos_perforados"))</div><div class="stat__foot">pozos</div></div>
+            <div class="stat" style="--acento: var(--azul-500)"><div class="stat__label">Anexos adjuntos</div><div class="stat__value">@p.Anexos.Count</div><div class="stat__foot">de @AnexosRequeridos.Todos.Count(a => a.Obligatorio) recomendados</div></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("check") Revisión antes de enviar</h2></div>
+            @if (!errores.Any() && !avisos.Any()) { <div class="alert alert-success">@Url.Icono("check")<div>No encontramos observaciones. Podés enviar.</div></div> }
+            @if (errores.Any())
+            {
+                <div class="alert alert-danger">@Url.Icono("alert")<div><strong>Corregí esto para poder enviar:</strong>
+                    <ul class="mb-0">@foreach (var o in errores) { <li>@(o.Anio is not null ? o.Anio + ": " : "")@o.Mensaje</li> }</ul></div></div>
+            }
+            @if (avisos.Any())
+            {
+                <div class="alert alert-warning">@Url.Icono("info")<div><strong>Advertencias (no bloquean el envío):</strong>
+                    <ul class="mb-0">@foreach (var o in avisos) { <li>@(o.Anio is not null ? o.Anio + ": " : "")@o.Mensaje</li> }</ul></div></div>
+            }
+            <p><a class="btn btn-outline-secondary btn-sm" asp-action="Exportar" asp-route-id="@p.Id">@Url.Icono("download") Descargar lo cargado en Excel</a></p>
+            @if (!ro)
+            {
+                <p class="form-text">Al enviar, la planilla queda registrada con un comprobante y te llega un mail. El año @anioFirme se considera <strong>compromiso firme de cumplimiento</strong>. Si después necesitás corregir algo, vas a poder presentar una rectificatoria (nueva versión).</p>
+                <form asp-action="Enviar" asp-route-id="@p.Id" method="post" data-una-vez data-confirmar="Una vez enviada no se puede modificar (solo rectificar). ¿Confirmás el envío?">
+                    <button class="btn btn-primary btn-lg" disabled="@errores.Any()">@Url.Icono("mail") Enviar presentación</button>
+                </form>
+            }
+        </div>
+    }
+
+    <div class="action-bar">
+        @if (paso.Indice > 0) { <a class="btn btn-outline-secondary" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Indice - 1)" data-flush>@Url.Icono("left") Anterior</a> } else { <span></span> }
+        @if (paso.Indice < Model.Pasos.Count - 1) { <a class="btn btn-primary" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Indice + 1)" data-flush>Siguiente @Url.Icono("right")</a> }
+    </div>
+</div>
+
+@section Scripts { <script src="~/js/plan-form.js" asp-append-version="true"></script> }

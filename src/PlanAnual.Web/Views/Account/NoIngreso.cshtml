@@ -1,0 +1,7 @@
+@model string
+@{ ViewData["Title"] = "No se pudo ingresar"; }
+<div class="container-xl py-5" style="max-width:640px"><div class="notice-card">
+    <h1>No pudimos abrir tu sesión</h1>
+    <p>@Model</p>
+    <a class="btn btn-primary" href="@(Context.RequestServices.GetRequiredService<IConfiguration>()["Acceso:PortalUrl"])">Volver al portal</a>
+</div></div>

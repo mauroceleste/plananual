@@ -1,0 +1,111 @@
+@{
+    var ancha = ViewData["Ancha"] as bool? ?? false;
+    var auth = User.Identity?.IsAuthenticated == true;
+    var u = auth ? User.ToSesion() : null;
+    var seccion = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var accion = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    string Activo(bool b) => b ? " is-active" : "";
+}
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#00374C" />
+    <title>@ViewData["Title"] · Plan Anual de Inversiones</title>
+    <script>try{var t=localStorage.getItem('legajo-tema');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-bs-theme',d?'dark':'light')}catch(e){}</script>
+    <script>try{var m=localStorage.getItem('legajo-menu');if(m==='closed')document.documentElement.setAttribute('data-side','closed')}catch(e){}</script>
+    <link rel="icon" type="image/svg+xml" href="~/img/favicon.svg" />
+    <link rel="preload" href="~/lib/fonts/manrope/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/marca.css" />
+    <link rel="stylesheet" href="~/css/detalle.css" />
+    <link rel="stylesheet" href="~/css/nqn-ui.css" />
+    <link rel="stylesheet" href="~/css/plan.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/registro.css" asp-append-version="true" />
+    @if (auth) { <meta name="csrf" content="@(((Microsoft.AspNetCore.Antiforgery.IAntiforgery)Context.RequestServices.GetService(typeof(Microsoft.AspNetCore.Antiforgery.IAntiforgery))!).GetAndStoreTokens(Context).RequestToken)" /> }
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+@if (auth)
+{
+    <aside class="app-side" id="menu-lateral" aria-label="Menú principal">
+        <div class="app-side__head">
+            <a class="brand" asp-controller="Home" asp-action="Index" aria-label="Plan Anual, inicio"><img src="~/img/nqn-isologo.svg" alt="Provincia del Neuquén" /></a>
+            <span class="app-side__app">Plan Anual</span>
+        </div>
+        <nav class="app-nav side-acc" id="side-acc" data-nav>
+            @if (u!.Rol == Rol.Empresa)
+            {
+                <div class="side-acc__item">
+                    <button type="button" class="side-acc__btn" data-bs-toggle="collapse" data-bs-target="#g-plan" aria-expanded="true" aria-controls="g-plan"><span>Plan de Inversiones</span>@Url.Icono("chev")</button>
+                    <div class="collapse show" id="g-plan" data-bs-parent="#side-acc">
+                        <a asp-controller="Plan" asp-action="Index" class="app-nav__link@(Activo(seccion == "Plan"))" aria-current="@(seccion == "Plan" ? "page" : null)">@Url.Icono("layers")Mis áreas</a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                var enAdmin = seccion == "Admin";
+                <div class="side-acc__item">
+                    <button type="button" class="side-acc__btn@(enAdmin ? " collapsed" : "")" data-bs-toggle="collapse" data-bs-target="#g-seg" aria-expanded="@(enAdmin ? "false" : "true")" aria-controls="g-seg"><span>Seguimiento</span>@Url.Icono("chev")</button>
+                    <div class="collapse@(enAdmin ? "" : " show")" id="g-seg" data-bs-parent="#side-acc">
+                        <a asp-controller="Tablero" asp-action="Index" class="app-nav__link@(Activo(seccion == "Tablero"))" aria-current="@(seccion == "Tablero" ? "page" : null)">@Url.Icono("trend")Tablero</a>
+                        <a asp-controller="Seguimiento" asp-action="Index" class="app-nav__link@(Activo(seccion == "Seguimiento"))" aria-current="@(seccion == "Seguimiento" ? "page" : null)">@Url.Icono("chart")Estado de presentaciones</a>
+                    </div>
+                </div>
+                @if (u.Rol == Rol.Administrador)
+                {
+                    <div class="side-acc__item">
+                        <button type="button" class="side-acc__btn@(enAdmin ? "" : " collapsed")" data-bs-toggle="collapse" data-bs-target="#g-adm" aria-expanded="@(enAdmin ? "true" : "false")" aria-controls="g-adm"><span>Administración</span>@Url.Icono("chev")</button>
+                        <div class="collapse@(enAdmin ? " show" : "")" id="g-adm" data-bs-parent="#side-acc">
+                            <a asp-controller="Admin" asp-action="Ciclo" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Ciclo"))">@Url.Icono("calendar")Convocatoria</a>
+                            <a asp-controller="Admin" asp-action="Correo" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Correo"))">@Url.Icono("mail")Correo</a>
+                            <a asp-controller="Admin" asp-action="Bloques" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Bloques"))">@Url.Icono("tag")Tipo de actividad</a>
+                        </div>
+                    </div>
+                }
+            }
+        </nav>
+        <div class="app-side__foot">Subsecretaría de Hidrocarburos<br />Provincia del Neuquén</div>
+    </aside>
+    <div class="side-backdrop" data-side-close></div>
+
+    <header class="reg-nav">
+        <div class="reg-nav__in">
+            <button type="button" class="icon-btn" data-side-toggle aria-controls="menu-lateral" aria-expanded="true" aria-label="Ocultar el menú lateral" title="Mostrar u ocultar el menú">@Url.Icono("menu")</button>
+            <a class="brand" asp-controller="Home" asp-action="Index" aria-label="Plan Anual, inicio"><img src="~/img/nqn-isologo.svg" alt="Provincia del Neuquén" /><span class="brand__sep" aria-hidden="true"></span><span class="brand__app">Plan Anual</span></a>
+            <div class="reg-nav__tools">
+                <button type="button" class="icon-btn theme-toggle" data-theme-toggle aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro">
+                    <svg class="icon i-moon"><use href="@Url.Content("~/img/iconos.svg")#i-moon"/></svg><svg class="icon i-sun"><use href="@Url.Content("~/img/iconos.svg")#i-sun"/></svg>
+                </button>
+                <div class="user-chip">
+                    <span class="avatar" aria-hidden="true">@Formato.Iniciales(u.Nombre.Replace("Usuario de prueba", "UP"))</span>
+                    <span class="user-chip__text"><span class="user-chip__name">@u.Nombre</span><span class="user-chip__role">@u.Rol</span></span>
+                </div>
+                <form asp-controller="Account" asp-action="Logout" method="post" class="m-0"><button class="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión">@Url.Icono("logout")</button></form>
+            </div>
+        </div>
+    </header>
+}
+    <main id="contenido" class="app-main">
+        @if (TempData["Mensaje"] is string m || TempData["Error"] is string)
+        {
+            <div class="container-xl@(ancha ? " is-wide" : "")"><div class="flash mt-4">
+                @if (TempData["Mensaje"] is string ok) { <div class="alert alert-success" role="status">@Url.Icono("check")<div>@ok</div></div> }
+                @if (TempData["Error"] is string er) { <div class="alert alert-danger" role="alert">@Url.Icono("alert")<div>@er</div></div> }
+            </div></div>
+        }
+        @RenderBody()
+    </main>
+    <footer class="app-footer"><div class="container-xl app-footer__in">
+        <img src="~/img/nqn-escudo.svg" alt="Gobierno de la Provincia del Neuquén" />
+        <div><strong>Plan Anual de Inversiones</strong> · Subsecretaría de Hidrocarburos<br />© @DateTime.Now.Year Gobierno de la Provincia del Neuquén</div>
+    </div></footer>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/confirmar.js"></script>
+    <script src="~/js/tabla-datos.js"></script>
+    <script src="~/js/nqn-ui.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

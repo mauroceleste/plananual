@@ -1,0 +1,17 @@
+@model Ciclo
+@{ ViewData["Title"] = "Convocatoria"; }
+<div class="container-xl py-4" style="max-width:760px">
+    <div class="page-head"><div><span class="page-head__eyebrow">Administración</span><h1>Convocatoria</h1>
+        <p>Plazo de presentación del Plan de Inversiones. Mientras esté abierta, las empresas pueden cargar y enviar.</p></div></div>
+    <div class="panel">
+        <form asp-action="Ciclo" method="post" data-una-vez class="row g-3">
+            <div class="col-md-4"><label class="form-label" for="anio">Año del plan</label><input class="form-control" id="anio" name="anio" type="number" value="@Model.Anio" required /></div>
+            <div class="col-md-8"><label class="form-label" for="nombre">Nombre</label><input class="form-control" id="nombre" name="nombre" value="@Model.Nombre" maxlength="150" required /></div>
+            <div class="col-md-6"><label class="form-label" for="fechaLimite">Fecha límite</label><input class="form-control" id="fechaLimite" name="fechaLimite" type="date" value="@Model.FechaLimite.ToString("yyyy-MM-dd")" required /></div>
+            <div class="col-md-6"><label class="form-label" for="fechaProrroga">Prórroga (opcional)</label><input class="form-control" id="fechaProrroga" name="fechaProrroga" type="date" value="@Model.FechaProrroga?.ToString("yyyy-MM-dd")" /></div>
+            <div class="col-12"><label class="form-label" for="notaGde">Nota GDE de la convocatoria</label><input class="form-control" id="notaGde" name="notaGde" value="@Model.NotaGde" placeholder="NO-2026-00000000-NEU-SEMH#MERN" /></div>
+            <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="abierto" name="abierto" value="true" @(Model.Abierto ? "checked" : "") /><label class="form-check-label" for="abierto">Convocatoria abierta</label></div></div>
+            <div class="col-12"><button class="btn btn-primary">Guardar</button></div>
+        </form>
+    </div>
+</div>

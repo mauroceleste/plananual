@@ -1,0 +1,35 @@
+@model CorreoVm
+@{ ViewData["Title"] = "Correo";
+   string Estado(bool ok, string si, string no) => ok ? si : no; }
+<div class="container-xl py-4" style="max-width:860px">
+    <div class="page-head"><div><span class="page-head__eyebrow">Administración</span><h1>Correo</h1>
+        <p>Cómo está configurado el envío de avisos y una prueba para confirmarlo. La configuración se cambia en el servidor; la contraseña nunca se muestra.</p></div></div>
+
+    @if (!Model.Habilitado) { <div class="alert alert-warning">@Url.Icono("alert")<div><strong>El envío de mails está deshabilitado.</strong> Los envíos se registran como no enviados y la presentación igual queda guardada. Se habilita con <code>Mail:Habilitado</code>.</div></div> }
+    else if (Model.ModoPrueba) { <div class="alert alert-info">@Url.Icono("info")<div><strong>Modo de prueba activo.</strong> Todos los mails se desvían a la lista de prueba, con el asunto <code>[PRUEBA]</code>. Se apaga con <code>Mail:ModoPrueba=false</code> al salir a producción.</div></div> }
+    else { <div class="alert alert-success">@Url.Icono("check")<div>Los avisos salen a las empresas y a la Subsecretaría.</div></div> }
+
+    <div class="panel section-gap">
+        <div class="panel__head"><h2 class="panel__title">@Url.Icono("sliders") Configuración actual</h2></div>
+        <dl class="meta-grid">
+            <div><dt>Envío</dt><dd>@Estado(Model.Habilitado, "Habilitado", "Deshabilitado")</dd></div>
+            <div><dt>Modo de prueba</dt><dd>@Estado(Model.ModoPrueba, "Activo", "Apagado")</dd></div>
+            <div><dt>Servidor SMTP</dt><dd>@(string.IsNullOrWhiteSpace(Model.Host) ? "— sin configurar —" : $"{Model.Host}:{Model.Puerto}") @(Model.Ssl ? "(SSL)" : "")</dd></div>
+            <div><dt>Remitente</dt><dd>@Model.Desde</dd></div>
+            <div><dt>Autenticación</dt><dd>@Estado(Model.TieneUsuario, Model.TieneClave ? "Usuario y contraseña configurados" : "Usuario configurado, falta la contraseña", "Sin usuario (relay interno)")</dd></div>
+            <div><dt>Link de los comprobantes</dt><dd>@(string.IsNullOrWhiteSpace(Model.PublicOrigin) ? "— usa el host de la petición (configurar PublicOrigin detrás del proxy) —" : Model.PublicOrigin)</dd></div>
+            <div><dt>Copia a la Subsecretaría</dt><dd>@(Model.Subsecretaria.Any() ? string.Join(", ", Model.Subsecretaria) : "— nadie: configurar Mail:Subsecretaria —")</dd></div>
+            <div><dt>Lista de prueba</dt><dd>@(Model.ListaPrueba.Any() ? string.Join(", ", Model.ListaPrueba) : "— vacía —")</dd></div>
+        </dl>
+    </div>
+
+    <div class="panel">
+        <div class="panel__head"><h2 class="panel__title">@Url.Icono("mail") Enviar un mail de prueba</h2></div>
+        <form asp-action="ProbarCorreo" method="post" data-una-vez class="row g-3 align-items-end">
+            <div class="col-md-8"><label class="form-label" for="para">Destinatario</label>
+                <input class="form-control" id="para" name="para" type="email" placeholder="@Model.MiMail" />
+                <div class="form-text">Si lo dejás vacío se envía a tu casilla (@(string.IsNullOrWhiteSpace(Model.MiMail) ? "sin mail en tu usuario" : Model.MiMail)).</div></div>
+            <div class="col-md-4"><button class="btn btn-primary">@Url.Icono("mail") Enviar prueba</button></div>
+        </form>
+    </div>
+</div>

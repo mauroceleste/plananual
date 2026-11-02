@@ -1,0 +1,161 @@
+/* Identidad visual — Manual de uso 2026, Provincia del Neuquén.
+   Paleta: azul petróleo, coral, turquesa, amarillo, verde, crema. Tipografía: Manrope. */
+
+@font-face { font-family: "Manrope"; font-weight: 400; font-display: swap; src: url("../fonts/Manrope-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Manrope"; font-weight: 500; font-display: swap; src: url("../fonts/Manrope-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Manrope"; font-weight: 600; font-display: swap; src: url("../fonts/Manrope-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Manrope"; font-weight: 700; font-display: swap; src: url("../fonts/Manrope-Bold.ttf") format("truetype"); }
+@font-face { font-family: "Manrope"; font-weight: 800; font-display: swap; src: url("../fonts/Manrope-ExtraBold.ttf") format("truetype"); }
+
+:root {
+    /* Azul petróleo: el que ya trae el logo institucional (marca-institucional.png, fondo #00374C) —
+       si se cambia acá sin recortar/recolorear esa imagen, la barra y el logo dejan de matchear.
+       Verde NQN oficial (Quick Reference Color RGB) para acentos de menú/tablas, en vez del turquesa/
+       amarillo del manual anterior. Coral, turquesa y amarillo quedan como acentos de apoyo (indicadores,
+       estados de alerta). */
+    --nqn-petroleo: #00374C;
+    --nqn-coral: #F26054;
+    --nqn-turquesa: #00ADB5;
+    --nqn-amarillo: #F8C60A;
+    --nqn-verde: #87B867;
+    --nqn-crema: #FCF2DC;
+    --nqn-beige2: #F4DFB9;
+    --nqn-petroleo-70: #4d7383;
+    --nqn-borde: #e6dcc6;
+
+    --bs-body-font-family: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --bs-body-color: var(--nqn-petroleo);
+    --bs-body-bg: #ffffff;
+    --bs-link-color: #00707a;          /* turquesa oscurecido: contraste AA sobre blanco */
+    --bs-link-color-rgb: 0, 112, 122;
+    --bs-link-hover-color: var(--nqn-petroleo);
+    --bs-border-color: var(--nqn-borde);
+    --bs-primary: var(--nqn-petroleo);
+    --bs-primary-rgb: 0, 55, 76;
+    --bs-success: var(--nqn-verde);
+    --bs-success-rgb: 135, 184, 100;
+    --bs-danger: var(--nqn-coral);
+    --bs-danger-rgb: 242, 96, 84;
+    --bs-warning: var(--nqn-amarillo);
+    --bs-warning-rgb: 248, 198, 10;
+    --bs-info: var(--nqn-turquesa);
+    --bs-info-rgb: 0, 173, 181;
+}
+
+html { font-size: 15px; }
+body { font-family: var(--bs-body-font-family); background: #fff; color: var(--nqn-petroleo); margin-bottom: 60px; }
+
+h1, h2, h3, h4, h5, h6 { font-weight: 800; color: var(--nqn-petroleo); letter-spacing: -.01em; }
+h2 { margin-bottom: 1rem; }
+h4, h5 { margin-top: 1.6rem; font-size: 1.05rem; text-transform: uppercase; letter-spacing: .04em; }
+a { text-underline-offset: 2px; }
+
+/* --- Encabezado --- */
+.nqn-header { background: var(--nqn-petroleo); color: var(--nqn-crema); border-bottom: 4px solid var(--nqn-verde); }
+.nqn-header .navbar-brand { display: flex; align-items: center; gap: 1rem; padding: .6rem 0; color: var(--nqn-crema); }
+.nqn-header .navbar-brand img { height: 42px; width: auto; }
+.nqn-header .sistema { font-weight: 800; font-size: 1.15rem; color: var(--nqn-verde); border-left: 1px solid rgba(252,242,220,.35); padding-left: 1rem; line-height: 1.1; }
+.nqn-header .sistema small { display: block; font-weight: 500; font-size: .7rem; color: var(--nqn-crema); opacity: .85; letter-spacing: .05em; text-transform: uppercase; }
+.nqn-header .nav-link { color: var(--nqn-crema); font-weight: 600; padding: .9rem 1rem; border-bottom: 3px solid transparent; }
+.nqn-header .nav-link:hover, .nqn-header .nav-link:focus { color: #fff; border-bottom-color: var(--nqn-verde); }
+.nqn-header .nav-link.active { color: #fff; border-bottom-color: var(--nqn-verde); }
+.nqn-header .navbar-toggler { border-color: rgba(252,242,220,.5); }
+.nqn-header .navbar-toggler-icon { filter: invert(1); }
+
+/* --- Botones --- */
+.btn { font-weight: 700; } /* el radio lo define nqn-ui.css (--bs-btn-border-radius); no lo pisamos acá */
+.btn-primary { --bs-btn-bg: var(--nqn-petroleo); --bs-btn-border-color: var(--nqn-petroleo); --bs-btn-color: var(--nqn-crema);
+    --bs-btn-hover-bg: var(--nqn-turquesa); --bs-btn-hover-border-color: var(--nqn-turquesa); --bs-btn-hover-color: var(--nqn-petroleo);
+    --bs-btn-active-bg: var(--nqn-turquesa); --bs-btn-active-border-color: var(--nqn-turquesa); --bs-btn-active-color: var(--nqn-petroleo); }
+.btn-success { --bs-btn-bg: var(--nqn-verde); --bs-btn-border-color: var(--nqn-verde); --bs-btn-color: var(--nqn-petroleo);
+    --bs-btn-hover-bg: #74a552; --bs-btn-hover-border-color: #74a552; --bs-btn-hover-color: var(--nqn-petroleo); }
+.btn-danger { --bs-btn-bg: var(--nqn-coral); --bs-btn-border-color: var(--nqn-coral); --bs-btn-color: var(--nqn-petroleo);
+    --bs-btn-hover-bg: #e04a3e; --bs-btn-hover-border-color: #e04a3e; --bs-btn-hover-color: var(--nqn-petroleo); }
+.btn-warning { --bs-btn-bg: var(--nqn-amarillo); --bs-btn-border-color: var(--nqn-amarillo); --bs-btn-color: var(--nqn-petroleo); }
+.btn-outline-secondary { --bs-btn-color: var(--nqn-petroleo); --bs-btn-border-color: var(--nqn-petroleo);
+    --bs-btn-hover-bg: var(--nqn-petroleo); --bs-btn-hover-border-color: var(--nqn-petroleo); --bs-btn-hover-color: var(--nqn-crema); }
+
+/* --- Formularios --- */
+.form-control, .form-select { border-color: #c9d6db; color: var(--nqn-petroleo); } /* radio: nqn-ui.css */
+.form-control:focus, .form-select:focus { border-color: var(--nqn-turquesa); box-shadow: 0 0 0 .2rem rgba(0,173,181,.25); }
+.form-label { font-weight: 600; font-size: .85rem; margin-bottom: .2rem; }
+.form-check-input { border-color: var(--nqn-petroleo-70); border-width: 1.5px; }
+.form-check-input:checked { background-color: var(--nqn-petroleo); border-color: var(--nqn-petroleo); }
+
+/* --- Tablas --- */
+.table { --bs-table-bg: var(--surface, #fff); --bs-table-striped-bg: rgba(135,184,103,.1); --bs-table-hover-bg: rgba(135,184,103,.14); }
+[data-bs-theme="light"] .table { --bs-table-striped-bg: rgba(252,242,220,.35); }
+.table > thead > tr > th { background: var(--nqn-petroleo); color: var(--nqn-crema); font-weight: 700; font-size: .78rem;
+    text-transform: uppercase; letter-spacing: .05em; border-bottom: 0; white-space: nowrap; }
+/* los listados (Contratos/Áreas/Empresas, informes) usan table-sm para caber muchas columnas,
+   pero el padding por defecto de table-sm (.25rem) queda muy apretado — le damos más aire. */
+table.datos.table-sm > :not(caption) > * > * { padding-top: .6rem; padding-bottom: .6rem; padding-left: .75rem; padding-right: .75rem; }
+table.datos.table-sm { line-height: 1.4; }
+.table > :not(caption) > * > * { border-bottom-color: var(--nqn-borde); }
+
+/* --- Avisos, pestañas y tarjetas --- */
+.alert { border: 0; border-left: 5px solid; border-radius: .5rem; color: var(--nqn-petroleo); }
+.alert-success { background: #eaf3e2; border-left-color: var(--nqn-verde); }
+.alert-danger { background: #fde6e3; border-left-color: var(--nqn-coral); }
+.alert-warning { background: #fdf2c4; border-left-color: var(--nqn-amarillo); }
+.alert-info { background: #d9f2f3; border-left-color: var(--nqn-turquesa); }
+.badge.bg-success { background: var(--nqn-verde) !important; color: var(--nqn-petroleo); }
+.badge.bg-secondary { background: var(--nqn-petroleo-70) !important; }
+.badge.bg-warning { background: var(--nqn-amarillo) !important; color: var(--nqn-petroleo) !important; }
+.nav-tabs { border-bottom: 2px solid var(--nqn-petroleo); }
+.nav-tabs .nav-link { color: var(--nqn-petroleo); font-weight: 700; border: 0; border-radius: .5rem .5rem 0 0; }
+.nav-tabs .nav-link:hover { background: var(--nqn-crema); }
+.nav-tabs .nav-link.active { background: var(--nqn-petroleo); color: var(--nqn-crema); }
+.card { border-color: var(--border, var(--nqn-borde)); border-radius: var(--radius-lg, .75rem); overflow: hidden; background: var(--surface, #fff); }
+.card-header { background: var(--surface-2, var(--nqn-crema)); font-weight: 700; border-bottom-color: var(--border, var(--nqn-borde)); }
+dt { font-weight: 700; }
+.text-muted { color: var(--nqn-petroleo-70) !important; }
+
+/* --- Pie --- */
+.footer { position: absolute; bottom: 0; width: 100%; line-height: 60px; background: var(--nqn-crema); border-top: 0 !important; color: var(--nqn-petroleo-70) !important; font-size: .8rem; }
+
+/* --- Panel de inicio --- */
+.tarjeta-numero { display: flex; flex-direction: column; height: 100%; padding: 1rem 1.2rem; border-radius: var(--radius-lg, .75rem); background: var(--nqn-crema);
+    border-left: 6px solid var(--acento, var(--nqn-turquesa)); text-decoration: none; color: var(--nqn-petroleo); transition: transform .1s, box-shadow .1s; }
+.tarjeta-numero:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,55,76,.15); color: var(--nqn-petroleo); }
+.tarjeta-numero .numero { font-size: 2.2rem; font-weight: 800; line-height: 1.1; }
+.tarjeta-numero .rotulo { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.tarjeta-numero .variacion { display: block; font-size: .72rem; font-weight: 600; color: var(--nqn-petroleo-70); margin-top: .25rem; text-transform: none; letter-spacing: 0; }
+/* En modo noche la tarjeta no puede quedar beige fija: usa la superficie del tema y mantiene el acento de color. */
+[data-bs-theme="dark"] .tarjeta-numero, [data-bs-theme="dark"] .tarjeta-numero:hover { background: var(--surface-2); color: var(--text); }
+[data-bs-theme="dark"] .tarjeta-numero .variacion { color: var(--text-2); }
+.cambios li { border-left: 3px solid var(--nqn-turquesa); padding: .2rem .75rem; margin-bottom: .7rem; }
+
+.nqn-header .dropdown-menu { border: 0; border-top: 3px solid var(--nqn-verde); border-radius: 0 0 .5rem .5rem; }
+.nqn-header .dropdown-item { font-weight: 600; color: var(--nqn-petroleo); }
+.nqn-header .dropdown-item:hover { background: var(--nqn-crema); }
+
+/* --- Celulares y pantallas chicas --- */
+@media (max-width: 767.98px) {
+    .nqn-header .navbar-brand img { height: 28px; }
+    .nqn-header .sistema { display: none; }
+    .nqn-header .navbar-brand { gap: .5rem; padding: .5rem 0; }
+    .nqn-header .nav-link { padding: .6rem .25rem; border-bottom-width: 0; }
+    .container-xxl { padding-left: .75rem; padding-right: .75rem; }
+    h2 { font-size: 1.5rem; }
+}
+
+/* --- Tablas de consulta (tabla-datos.js) --- */
+.tabla-barra label { font-size: .85rem; font-weight: 600; }
+.table th.ordenable { cursor: pointer; user-select: none; padding-right: 1.6rem; background-repeat: no-repeat; background-position: right .5rem center; background-size: .6rem .95rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 0L10 6H0zM5 16L0 10H10z' fill='%23FCF2DC' fill-opacity='.4'/%3E%3C/svg%3E"); }
+.table th.orden-asc { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 0L10 6H0z' fill='%2387B867'/%3E%3Cpath d='M5 16L0 10H10z' fill='%23FCF2DC' fill-opacity='.3'/%3E%3C/svg%3E"); }
+.table th.orden-desc { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 0L10 6H0z' fill='%23FCF2DC' fill-opacity='.3'/%3E%3Cpath d='M5 16L0 10H10z' fill='%2387B867'/%3E%3C/svg%3E"); }
+.table th.ordenable:focus-visible { outline: 2px solid var(--nqn-verde); outline-offset: -2px; }
+.pagination .page-link { color: var(--nqn-petroleo); border-color: var(--nqn-borde); }
+.pagination .page-item.active .page-link { background: var(--nqn-petroleo); border-color: var(--nqn-petroleo); color: var(--nqn-crema); }
+
+/* --- Impresión --- */
+@media print {
+    .nqn-header, .footer, .no-imprimir, .tabla-barra, form, .btn, .alert { display: none !important; }
+    body { background: #fff; margin: 0; }
+    .container-xxl { max-width: 100%; padding: 0; }
+    .table > thead > tr > th { background: var(--nqn-petroleo) !important; color: var(--nqn-crema) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .table-responsive { overflow: visible; }
+    a { text-decoration: none; color: inherit; }
+}

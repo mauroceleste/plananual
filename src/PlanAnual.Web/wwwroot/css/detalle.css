@@ -1,0 +1,47 @@
+/* Pantallas de detalle: cabecera con migas, pestañas tipo carpeta y cajas de datos (estilo del sistema de consulta). */
+.detalle-cab { background: var(--surface, #fff); border: 1px solid var(--border, var(--nqn-borde)); border-radius: var(--radius-lg, .5rem); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+.detalle-cab h2 { font-weight: 300; margin: 0 0 .4rem; }
+.detalle-cab .breadcrumb { font-size: .85rem; }
+
+/* pestañas: la activa "se une" con el panel */
+.tabs-carpeta.nav-tabs { border-bottom: 1px solid var(--border, var(--nqn-borde)); gap: .15rem; flex-wrap: wrap; }
+.tabs-carpeta .nav-link { background: transparent; color: var(--muted, var(--nqn-petroleo-70)); font-weight: 700; font-size: .9rem; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius, .4rem) var(--radius, .4rem) 0 0; padding: .7rem 1.2rem; }
+.tabs-carpeta .nav-link:hover { background: var(--surface-3, var(--nqn-crema)); color: var(--text, var(--nqn-petroleo)); }
+.tabs-carpeta .nav-link.active { background: var(--surface, #fff); color: var(--text, var(--nqn-petroleo)); border-color: var(--border, var(--nqn-borde)); border-top: 3px solid var(--nqn-verde); margin-bottom: -1px; }
+.panel-carpeta { background: var(--surface, #fff); border: 1px solid var(--border, var(--nqn-borde)); border-top: 0; padding: 1.5rem; border-radius: 0 0 var(--radius-lg, .5rem) var(--radius-lg, .5rem); }
+
+/* cajas */
+.caja { border: 1px solid var(--border, var(--nqn-borde)); border-radius: var(--radius-lg, .35rem); background: var(--surface, #fff); overflow: hidden; }
+.caja-titulo { margin: 0; padding: .9rem 1rem; font-size: 1rem; font-weight: 700; border-bottom: 1px solid var(--border, var(--nqn-borde)); border-top: 2px solid var(--border, var(--nqn-borde)); border-radius: var(--radius-lg, .35rem) var(--radius-lg, .35rem) 0 0; }
+.caja-subtitulo { font-size: .95rem; font-weight: 700; margin: 1.2rem 0 .5rem; padding-top: 1rem; border-top: 1px solid var(--border, var(--nqn-borde)); }
+.dato { padding: .9rem 1rem; border-bottom: 1px solid var(--border, var(--nqn-borde)); }
+.dato:last-child { border-bottom: 0; }
+.dato h5 { font-size: 1.05rem; font-weight: 700; margin: 0 0 .2rem; color: var(--text, inherit); }
+.dato p { margin: 0; font-size: .9rem; color: var(--text-2, #3f5a66); }
+.dato p:empty::after { content: "—"; opacity: .4; }
+
+/* lista compacta: etiqueta y valor en la misma línea (en vez de h5 + párrafo apilados);
+   para conceptos cortos que si no dejan la caja con mucho aire vacío entre líneas. */
+.dato-linea { padding: .55rem 1rem; border-bottom: 1px solid var(--nqn-borde); font-size: .9rem; line-height: 1.4; }
+.dato-linea:last-child { border-bottom: 0; }
+.dato-linea strong { font-weight: 700; margin-right: .4rem; }
+.dato-linea .vacio { opacity: .4; }
+
+.tabla-simple thead th { border-bottom: 1px solid var(--border, var(--nqn-borde)); font-weight: 700; }
+.tabla-simple tbody td { border-color: transparent; color: var(--text-2, inherit); }
+.tabla-simple tbody tr:nth-child(odd) td { background: var(--surface-2, #faf8f2); }
+.tabla-simple .cifra { color: #00707a; font-variant-numeric: tabular-nums; }
+.fila-cert td { color: #5c7480; }
+.etiqueta-usd { display: inline-block; background: var(--nqn-turquesa); color: #fff; font-weight: 700; font-size: .75rem; padding: .15rem .5rem; border-radius: var(--radius-sm, .25rem); white-space: nowrap; }
+
+/* mosaicos de fechas */
+.mosaico-fecha { display: flex; align-items: center; gap: .75rem; background: var(--nqn-turquesa); color: #fff; border-radius: var(--radius, .35rem); padding: .9rem 1rem; height: 100%; }
+.mosaico-fecha svg { flex: none; }
+.mosaico-fecha div { text-align: right; margin-left: auto; line-height: 1.15; }
+.mosaico-fecha span { display: block; font-size: .78rem; }
+.mosaico-fecha strong { display: block; font-size: 1.35rem; font-weight: 800; }
+
+/* en el detalle los títulos van en minúscula y las tablas simples con encabezado claro */
+.caja-titulo, .dato h5, .caja-subtitulo { text-transform: none; letter-spacing: 0; margin-top: 0; }
+.caja-titulo { font-size: 1.05rem; }
+.table.tabla-simple > thead > tr > th { background: var(--nqn-petroleo); color: var(--nqn-crema); text-transform: uppercase; letter-spacing: .04em; font-size: .78rem; font-weight: 700; border-bottom: 0; white-space: nowrap; }

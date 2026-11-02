@@ -1,0 +1,66 @@
+@model MisAreasVm
+@{ ViewData["Title"] = "Mis áreas"; ViewData["Ancha"] = true;
+   var c = Model.Ciclo; var asiste = Model.CuitAsistido is not null; }
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div><span class="page-head__eyebrow">@(c?.Nombre ?? "Plan de Inversiones")</span><h1>@(asiste ? Model.RazonAsistida : "Mis áreas")</h1>
+            @if (asiste) { <p>Estás asistiendo a esta empresa en la carga.</p> }
+            else { <p>Cargá una planilla por cada área que operás. Podés guardar borradores y completarlos después; recién se envía cuando vos lo confirmás.</p> }</div>
+        @if (asiste) { <a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index">@Url.Icono("arrow-left") Presentaciones</a> }
+    </div>
+    @if (asiste) { <div class="alert alert-info">@Url.Icono("info")<div><strong>Asistencia de Administración.</strong> Todo lo que cargues, adjuntes o envíes queda registrado a tu nombre, en nombre de la empresa. El comprobante y el mail lo indican.</div></div> }
+
+    @if (c is null) { <div class="alert alert-warning">@Url.Icono("alert")<div>No hay una convocatoria abierta en este momento.</div></div> }
+    else
+    {
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        var dias = c.LimiteVigente.DayNumber - hoy.DayNumber;
+        <div class="alert @(dias < 0 ? "alert-danger" : dias <= 7 ? "alert-warning" : "alert-info")">@Url.Icono("clock")
+            <div>Fecha límite: <strong>@Formato.Fecha(c.LimiteVigente)</strong>@(c.FechaProrroga is not null ? " (con prórroga)" : "").
+            @(dias < 0 ? "El plazo venció: se registrará como presentación fuera de término." : dias == 0 ? "Vence hoy." : $"Faltan {dias} días.")
+            El año @c.Anio se considera compromiso firme de cumplimiento.</div></div>
+    }
+    @if (Model.ErrorServicio is not null) { <div class="alert alert-danger">@Url.Icono("alert")<div>@Model.ErrorServicio</div></div> }
+
+    @if (!Model.Filas.Any() && Model.ErrorServicio is null)
+    {
+        <div class="empty">@Url.Icono("building")<p>No encontramos áreas operadas por tu empresa en Legajos de Áreas.</p></div>
+    }
+    else if (Model.Filas.Any())
+    {
+        <div class="table-card"><div class="table-responsive">
+        <table class="table data-table is-cards">
+            <thead><tr><th>Área</th><th>Operadora</th><th>Tipo de plan</th><th>Estado</th><th>Última modificación</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var f in Model.Filas)
+            {
+                var p = f.Ultima;
+                <tr>
+                    <td data-label="Área"><span class="t-title">@f.Bloque.Nombre</span></td>
+                    <td data-label="Operadora">@f.Bloque.RazonSocial</td>
+                    <td data-label="Tipo de plan">@if (f.Tipo is null) { <span class="chip chip--tag">A definir por la Subsecretaría</span> } else { <span class="chip chip--tag">@(f.Tipo == TipoPlan.Cench ? "CENCH" : "Convencional")</span> }</td>
+                    <td data-label="Estado">
+                        @if (p is null) { <span class="chip">Sin iniciar</span> }
+                        else if (p.Estado == EstadoPresentacion.Borrador) { <span class="chip chip--warn">Borrador@(p.Version > 1 ? $" (rectificatoria v{p.Version})" : "")</span> }
+                        else { <span class="chip chip--ok">Enviada v@(p.Version)</span> }
+                    </td>
+                    <td data-label="Última modificación">@Formato.Fecha(p?.ModificadaEn)</td>
+                    <td class="t-actions">
+                        @if (p is null)
+                        {
+                            <form asp-action="Iniciar" method="post" data-una-vez class="d-inline"><input type="hidden" name="idBloque" value="@f.Bloque.IdBloque" /><input type="hidden" name="cuit" value="@Model.CuitAsistido" />
+                                <button class="btn btn-accent btn-sm" disabled="@(f.Tipo is null || c is null)">@Url.Icono("plus") Comenzar</button></form>
+                        }
+                        else if (p.Estado == EstadoPresentacion.Borrador) { <a class="btn btn-primary btn-sm" asp-action="Editar" asp-route-id="@p.Id">@Url.Icono("edit") Continuar</a> }
+                        else
+                        {
+                            <a class="btn btn-outline-secondary btn-sm" asp-action="Comprobante" asp-route-id="@p.Id">@Url.Icono("file") Comprobante</a>
+                            <form asp-action="Rectificar" asp-route-id="@p.Id" method="post" data-una-vez data-confirmar="Se crea una nueva versión en borrador a partir de la última enviada. ¿Continuar?" class="d-inline"><input type="hidden" name="cuit" value="@Model.CuitAsistido" /><button class="btn btn-ghost btn-sm">Rectificar</button></form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table></div></div>
+    }
+</div>
