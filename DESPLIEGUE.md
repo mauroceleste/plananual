@@ -101,9 +101,11 @@ Un mail que falla **no** impide el envío: la presentación queda registrada y e
 dotnet publish src/PlanAnual.Web -c Release -o publish
 ```
 
-1. Poner `app_offline.htm` en la carpeta del sitio.
-2. Copiar el contenido de `publish`.
-3. Borrar `app_offline.htm`.
+**La configuración del servidor no se pisa.** Antes de copiar, borrar de `publish`: `web.config`, `appsettings.json`, `appsettings.Production.json` y `appsettings.Development.json`. Esos archivos tienen los valores de ejemplo (`CAMBIAR`) y, si se copian, la aplicación no arranca (503). Si cambia la configuración, se edita a mano en el servidor.
+
+1. Detener el grupo de aplicaciones (`Stop-WebAppPool PlanAnual`) y esperar a que diga `Stopped`: con el sitio andando los `.dll` están en uso.
+2. Copiar el **contenido** de `publish` (no la carpeta `publish` entera) sobre la carpeta del sitio.
+3. Arrancar el grupo (`Start-WebAppPool PlanAnual`).
 
 El grupo de aplicaciones de IIS necesita **escritura** en la carpeta de anexos y en la de claves (`DataProtection:Carpeta`).
 
