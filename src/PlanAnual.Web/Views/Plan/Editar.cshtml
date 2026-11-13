@@ -51,8 +51,8 @@
             {
                 <form asp-action="Rango" asp-route-id="@p.Id" method="post" class="rango" data-una-vez>
                     <input type="hidden" name="paso" value="0" />
-                    <label>Años de la planilla: desde <input class="form-control form-control-sm" type="number" name="desde" value="@p.AnioDesde" min="@(anioFirme - 10)" max="@anioFirme" /></label>
-                    <label>hasta <input class="form-control form-control-sm" type="number" name="hasta" value="@p.AnioHasta" min="@anioFirme" max="@(anioFirme + 60)" /></label>
+                    <input type="hidden" name="desde" value="@anioFirme" />
+                    <label>Años de la planilla: desde <strong>@anioFirme</strong> (mes por mes) hasta <input class="form-control form-control-sm" type="number" name="hasta" value="@p.AnioHasta" min="@anioFirme" max="@(anioFirme + 60)" /></label>
                     <button class="btn btn-outline-secondary btn-sm">Aplicar</button>
                     <span class="form-text">Cargá hasta el vencimiento de la concesión. Si achicás el rango se descartan los años que queden afuera.</span>
                 </form>
@@ -62,6 +62,25 @@
                 Usá coma para los decimales (ej. 12,5). Podés pegar un bloque copiado desde Excel: se completa a partir de la celda donde estés parado.
                 Las columnas grises se calculan solas.
             </p>
+
+            <details class="consideraciones" open="@(paso.Indice == 0)">
+                <summary>@Url.Icono("info") Consideraciones a tener en cuenta</summary>
+                <ul>
+                    <li>Todos los montos están en <strong>millones de dólares (MMUSD)</strong>; los volúmenes, en las unidades que indica cada columna. No mezcles unidades: por ejemplo, 1,5 MMUSD son USD 1.500.000.</li>
+                    <li>Cargá todas las celdas de cada año. Si no hay actividad o valor, ingresá <strong>0</strong> en lugar de dejarla vacía.</li>
+                    <li>El año <strong>@anioFirme</strong> (compromiso firme de cumplimiento) se carga <strong>mes por mes</strong>; los años siguientes, uno por fila. La fila "@anioFirme total" la calcula el sistema: suma los meses (o promedia, o toma el máximo o el último mes, según el campo).</li>
+                    <li>Los valores <strong>diarios</strong> (bbl/d, MMm3/d) son promedios del año; los <strong>acumulados</strong> (%) crecen año a año y no se suman.</li>
+                </ul>
+                <table class="consideraciones__unidades">
+                    <thead><tr><th>Unidad</th><th>Significa</th><th>Columnas de este paso</th></tr></thead>
+                    <tbody>
+                        @foreach (var g in paso.Campos.GroupBy(x => x.Unidad).OrderBy(x => x.Key))
+                        {
+                            <tr><td><strong>@g.Key</strong></td><td>@CatalogoCampos.DescripcionUnidad(g.Key)</td><td>@string.Join(", ", g.Take(4).Select(x => x.Nombre))@(g.Count() > 4 ? $" y {g.Count() - 4} más" : "")</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
 
             <div class="grilla-wrap" tabindex="0" aria-label="Planilla de @paso.Titulo">
                 <table class="grilla" data-guardar="@Url.Action("Guardar", "Plan", new { id = p.Id })" data-ro="@(ro ? "1" : "0")">
@@ -77,14 +96,20 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var anio in Model.Anios)
+                        @foreach (var f in Model.Filas)
                         {
-                            <tr data-anio="@anio" class="@(anio == anioFirme ? "es-firme" : "")">
-                                <th scope="row" class="grilla__anio">@anio@if (anio == anioFirme) { <span class="grilla__firme" title="Compromiso firme de cumplimiento">firme</span> }</th>
+                            var anio = f.Anio;
+                            var etiqueta = f.Mes > 0 ? $"{Validador.Meses[f.Mes - 1]} {anio}" : anio.ToString();
+                            <tr data-anio="@anio" data-mes="@f.Mes" data-clave="@f.Clave" class="@(anio == anioFirme ? "es-firme" : "") @(f.EsSubtotal ? "es-subtotal" : "")">
+                                <th scope="row" class="grilla__anio">
+                                    @if (f.EsSubtotal) { <span>@anio total</span><span class="grilla__firme" title="Compromiso firme de cumplimiento">firme</span> }
+                                    else if (f.Mes > 0) { <span>@anio</span> <small class="grilla__mes">@Validador.Meses[f.Mes - 1][..3]</small> }
+                                    else { @anio }
+                                </th>
                                 @foreach (var c in paso.Campos)
                                 {
-                                    var v = Model.Valor(anio, c);
-                                    if (c.EsCalculado)
+                                    var v = Model.Valor(f, c);
+                                    if (c.EsCalculado || f.EsSubtotal)
                                     {
                                         <td class="is-calc"><output data-calc="@c.Codigo">@(v is null ? "" : Formato.Num(v, "N2"))</output></td>
                                     }
@@ -92,7 +117,7 @@
                                     {
                                         <td><input type="text" inputmode="@(c.DecimalesMax == 0 ? "numeric" : "decimal")" autocomplete="off" spellcheck="false" maxlength="22"
                                                    data-campo="@c.Codigo" data-dec="@c.DecimalesMax" data-max="@(c.Maximo?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
-                                                   aria-label="@c.Nombre, @anio" value="@Formato.Num(v)" readonly="@ro" /></td>
+                                                   aria-label="@c.Nombre, @etiqueta" value="@Formato.Num(v)" readonly="@ro" /></td>
                                     }
                                 }
                             </tr>
@@ -115,15 +140,15 @@
     {
         <div class="panel">
             <div class="panel__head"><h2 class="panel__title">@Url.Icono("paperclip") Documentación de respaldo</h2></div>
-            <p class="form-text">Son los puntos que pide la nota. Los marcados como <span class="chip chip--warn">Recomendado</span> no bloquean el envío, pero la Subsecretaría los va a reclamar si faltan. Formatos: PDF, Excel, Word, PowerPoint, imágenes, ZIP, KML.</p>
+            <p class="form-text">Son los puntos que pide la nota. Los marcados como <span class="chip chip--warn">Requerido</span> son obligatorios: sin ellos no se puede hacer la presentación final. Formatos: PDF, Excel, Word, PowerPoint, imágenes, ZIP, KML.</p>
             <ul class="anexos">
                 @foreach (var t in AnexosRequeridos.Todos)
                 {
                     var subidos = p.Anexos.Where(a => a.Tipo == t.Codigo).ToList();
                     <li>
                         <div class="anexos__titulo">
-                            <strong>@t.Nombre</strong>
-                            @if (t.Obligatorio) { <span class="chip @(subidos.Any() ? "chip--ok" : "chip--warn")">@(subidos.Any() ? "Presentado" : "Recomendado")</span> }
+                            <strong>@t.Titulo(anioFirme)</strong>
+                            @if (t.Obligatorio) { <span class="chip @(subidos.Any() ? "chip--ok" : "chip--warn")">@(subidos.Any() ? "Presentado" : "Requerido")</span> }
                             else if (subidos.Any()) { <span class="chip chip--ok">Presentado</span> }
                         </div>
                         @foreach (var a in subidos)
@@ -152,39 +177,75 @@
             </ul>
         </div>
     }
+    else if (paso.Tipo == TipoPaso.Texto)
+    {
+        var textos = new (string Nombre, string Titulo, string? Valor, string Ayuda)[]
+        {
+            ("conflictos", Validador.TextosBloque4[0].Titulo, p.ConflictosSuperficiarios, "Conflictos vigentes o previstos con superficiarios que puedan afectar la actividad."),
+            ("contratosFirmes", Validador.TextosBloque4[1].Titulo, p.EquiposContratosFirmes, $"Equipos de perforación, terminación, workover y otros servicios con contrato firme para {anioFirme}."),
+            ("plazos", Validador.TextosBloque4[2].Titulo, p.EquiposPlazos, "Plazos de los contratos y perspectivas de disponibilidad."),
+            ("costos", Validador.TextosBloque4[3].Titulo, p.EquiposCostos, "Costos de los contratos y perspectivas de variación."),
+        };
+        <div class="panel">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("alert") Restricciones a la actividad</h2></div>
+            <p class="form-text">Bloque 4 de la nota. Completá los cuatro puntos; si en alguno no hay nada para informar, escribí <strong>Ninguno</strong>. Se guarda solo al salir de cada cuadro.</p>
+            <form asp-action="GuardarTexto" asp-route-id="@p.Id" method="post" id="form-texto" data-ro="@(ro ? "1" : "0")" data-ajax="@Url.Action("GuardarTexto", "Plan", new { id = p.Id })">
+                <input type="hidden" name="paso" value="@paso.Indice" />
+                @foreach (var t in textos)
+                {
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="t-@t.Nombre">@t.Titulo</label>
+                        <textarea id="t-@t.Nombre" name="@t.Nombre" class="form-control" rows="4" maxlength="4000" readonly="@ro">@t.Valor</textarea>
+                        <div class="form-text">@t.Ayuda</div>
+                    </div>
+                }
+                @if (!ro)
+                {
+                    <span class="guardado" id="estado-texto" role="status" aria-live="polite">@Url.Icono("check")<span>Los cambios se guardan solos</span></span>
+                    <button class="btn btn-outline-secondary btn-sm ms-2">Guardar</button>
+                }
+            </form>
+        </div>
+    }
     else
     {
         var errores = Model.Observaciones.Where(o => o.EsError).ToList();
-        var avisos = Model.Observaciones.Where(o => !o.EsError).ToList();
-        var firme = Model.Calc.GetValueOrDefault(anioFirme);
-        var totalInv = Model.Calc.Values.Sum(f => f.GetValueOrDefault("inv_total"));
+        var requisitos = Model.Observaciones.Where(o => !o.EsError && o.EsRequisito).ToList();
+        var avisos = Model.Observaciones.Where(o => !o.EsError && !o.EsRequisito).ToList();
+        // Calc trae una fila por mes y una anual por año (clave año*100): para los totales se usan solo las anuales, que ya suman los meses.
+        var anuales = Model.Calc.Where(kv => kv.Key % 100 == 0).ToList();
+        var firme = Model.Calc.GetValueOrDefault(Calculadora.Clave(anioFirme, 0));
+        var totalInv = anuales.Sum(kv => kv.Value.GetValueOrDefault("inv_total"));
         <div class="stat-row">
             <div class="stat" style="--acento: var(--nqn-turquesa)"><div class="stat__label">Inversión @anioFirme (firme)</div><div class="stat__value">@Formato.Num2(firme?.GetValueOrDefault("inv_total"))</div><div class="stat__foot">MMUSD</div></div>
             <div class="stat" style="--acento: var(--nqn-amarillo)"><div class="stat__label">Inversión @p.AnioDesde–@p.AnioHasta</div><div class="stat__value">@Formato.Num2(totalInv)</div><div class="stat__foot">MMUSD</div></div>
             <div class="stat" style="--acento: var(--nqn-verde)"><div class="stat__label">Pozos a perforar @anioFirme</div><div class="stat__value">@Formato.Num2(firme?.GetValueOrDefault("pozos_perforados"))</div><div class="stat__foot">pozos</div></div>
-            <div class="stat" style="--acento: var(--azul-500)"><div class="stat__label">Anexos adjuntos</div><div class="stat__value">@p.Anexos.Count</div><div class="stat__foot">de @AnexosRequeridos.Todos.Count(a => a.Obligatorio) recomendados</div></div>
+            <div class="stat" style="--acento: var(--azul-500)"><div class="stat__label">Anexos adjuntos</div><div class="stat__value">@p.Anexos.Count</div><div class="stat__foot">@AnexosRequeridos.Todos.Count(a => a.Obligatorio) requeridos</div></div>
         </div>
 
         <div class="panel">
             <div class="panel__head"><h2 class="panel__title">@Url.Icono("check") Revisión antes de enviar</h2></div>
-            @if (!errores.Any() && !avisos.Any()) { <div class="alert alert-success">@Url.Icono("check")<div>No encontramos observaciones. Podés enviar.</div></div> }
+            @if (!errores.Any() && !requisitos.Any()) { <div class="alert alert-success">@Url.Icono("check")<div><strong>Esta área cumple con todos los requisitos de la nota.</strong> Cuando todas tus áreas estén completas, se envían juntas con la presentación final.</div></div> }
             @if (errores.Any())
             {
-                <div class="alert alert-danger">@Url.Icono("alert")<div><strong>Corregí esto para poder enviar:</strong>
+                <div class="alert alert-danger">@Url.Icono("alert")<div><strong>Hay datos para corregir:</strong>
                     <ul class="mb-0">@foreach (var o in errores) { <li>@(o.Anio is not null ? o.Anio + ": " : "")@o.Mensaje</li> }</ul></div></div>
+            }
+            @if (requisitos.Any())
+            {
+                <div class="alert alert-danger">@Url.Icono("alert")<div><strong>Falta cumplir con la nota (sin esto no se puede hacer la presentación final):</strong>
+                    <ul class="mb-0">@foreach (var o in requisitos) { <li>@(o.Anio is not null ? o.Anio + ": " : "")@o.Mensaje</li> }</ul></div></div>
             }
             @if (avisos.Any())
             {
-                <div class="alert alert-warning">@Url.Icono("info")<div><strong>Advertencias (no bloquean el envío):</strong>
+                <div class="alert alert-warning">@Url.Icono("info")<div><strong>Advertencias (no bloquean):</strong>
                     <ul class="mb-0">@foreach (var o in avisos) { <li>@(o.Anio is not null ? o.Anio + ": " : "")@o.Mensaje</li> }</ul></div></div>
             }
             <p><a class="btn btn-outline-secondary btn-sm" asp-action="Exportar" asp-route-id="@p.Id">@Url.Icono("download") Descargar lo cargado en Excel</a></p>
             @if (!ro)
             {
-                <p class="form-text">Al enviar, la planilla queda registrada con un comprobante y te llega un mail. El año @anioFirme se considera <strong>compromiso firme de cumplimiento</strong>. Si después necesitás corregir algo, vas a poder presentar una rectificatoria (nueva versión).</p>
-                <form asp-action="Enviar" asp-route-id="@p.Id" method="post" data-una-vez data-confirmar="Una vez enviada no se puede modificar (solo rectificar). ¿Confirmás el envío?">
-                    <button class="btn btn-primary btn-lg" disabled="@errores.Any()">@Url.Icono("mail") Enviar presentación</button>
-                </form>
+                <p class="form-text">Las áreas no se envían de a una: la <strong>presentación final</strong> se hace desde Mis áreas y solo se habilita cuando todas las áreas de la empresa cumplen con los requisitos de la nota. Al enviarla, cada área queda registrada con su comprobante y te llega un mail. El año @anioFirme se considera <strong>compromiso firme de cumplimiento</strong>. Si después necesitás corregir algo, vas a poder pedir autorización a la Subsecretaría para presentar una rectificatoria (nueva versión).</p>
+                <a class="btn btn-primary btn-lg" asp-action="Index" asp-route-cuit="@(asiste ? p.Cuit : null)" data-flush>@Url.Icono("layers") Ir a Mis áreas</a>
             }
         </div>
     }
@@ -195,4 +256,7 @@
     </div>
 </div>
 
-@section Scripts { <script src="~/js/plan-form.js" asp-append-version="true"></script> }
+@section Scripts {
+    <script src="~/js/plan-form.js" asp-append-version="true"></script>
+    <script src="~/js/texto-form.js" asp-append-version="true"></script>
+}

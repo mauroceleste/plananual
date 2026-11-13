@@ -20,6 +20,11 @@
             @(dias < 0 ? "El plazo venció: se registrará como presentación fuera de término." : dias == 0 ? "Vence hoy." : $"Faltan {dias} días.")
             El año @c.Anio se considera compromiso firme de cumplimiento.</div></div>
     }
+    @if (TempData["Problemas"] is string problemas)
+    {
+        <div class="alert alert-danger">@Url.Icono("alert")<div><strong>No se envió nada. Corregí esto y volvé a intentar:</strong>
+            <ul class="mb-0">@foreach (var linea in problemas.Split('\n')) { <li>@linea</li> }</ul></div></div>
+    }
     @if (Model.ErrorServicio is not null) { <div class="alert alert-danger">@Url.Icono("alert")<div>@Model.ErrorServicio</div></div> }
 
     @if (!Model.Filas.Any() && Model.ErrorServicio is null)
@@ -41,7 +46,13 @@
                     <td data-label="Tipo de plan">@if (f.Tipo is null) { <span class="chip chip--tag">A definir por la Subsecretaría</span> } else { <span class="chip chip--tag">@(f.Tipo == TipoPlan.Cench ? "CENCH" : "Convencional")</span> }</td>
                     <td data-label="Estado">
                         @if (p is null) { <span class="chip">Sin iniciar</span> }
-                        else if (p.Estado == EstadoPresentacion.Borrador) { <span class="chip chip--warn">Borrador@(p.Version > 1 ? $" (rectificatoria v{p.Version})" : "")</span> }
+                        else if (p.Estado == EstadoPresentacion.Borrador)
+                        {
+                            var falta = Model.Pendientes.GetValueOrDefault(p.Id) ?? [];
+                            <span class="chip chip--warn">Borrador@(p.Version > 1 ? $" (rectificatoria v{p.Version})" : "")</span>
+                            if (falta.Count == 0) { <br /><span class="chip chip--ok">Completa</span> }
+                            else { <details class="mt-1"><summary class="small text-danger">Falta completar (@falta.Count)</summary><ul class="small mb-0 ps-3">@foreach (var x in falta) { <li>@x</li> }</ul></details> }
+                        }
                         else { <span class="chip chip--ok">Enviada v@(p.Version)</span> }
                     </td>
                     <td data-label="Última modificación">@Formato.Fecha(p?.ModificadaEn)</td>
@@ -55,12 +66,72 @@
                         else
                         {
                             <a class="btn btn-outline-secondary btn-sm" asp-action="Comprobante" asp-route-id="@p.Id">@Url.Icono("file") Comprobante</a>
-                            <form asp-action="Rectificar" asp-route-id="@p.Id" method="post" data-una-vez data-confirmar="Se crea una nueva versión en borrador a partir de la última enviada. ¿Continuar?" class="d-inline"><input type="hidden" name="cuit" value="@Model.CuitAsistido" /><button class="btn btn-ghost btn-sm">Rectificar</button></form>
+                            var sol = f.Solicitud;
+                            var habilitada = sol is not null && sol.Vigente(DateTime.Now);
+                            if (asiste || habilitada)
+                            {
+                                <form asp-action="Rectificar" asp-route-id="@p.Id" method="post" data-una-vez data-confirmar="Se crea una nueva versión en borrador a partir de la última enviada. ¿Continuar?" class="d-inline"><input type="hidden" name="cuit" value="@Model.CuitAsistido" /><button class="btn btn-ghost btn-sm">Rectificar</button></form>
+                                if (habilitada && !asiste) { <div class="form-text">Autorizada hasta el @sol!.HabilitadaHasta?.ToString("dd/MM/yyyy HH:mm")</div> }
+                            }
+                            else if (sol is { Estado: EstadoSolicitud.Pendiente }) { <span class="chip chip--warn">Pedido de rectificación enviado</span> }
+                            else
+                            {
+                                <details class="pedir-rect">
+                                    <summary class="btn btn-ghost btn-sm">Pedir rectificación</summary>
+                                    <form asp-action="SolicitarRectificacion" asp-route-id="@p.Id" method="post" data-una-vez class="mt-2">
+                                        <input type="hidden" name="cuit" value="@Model.CuitAsistido" />
+                                        <label class="form-label small">Motivo de la modificación</label>
+                                        <textarea name="motivo" class="form-control form-control-sm" rows="3" minlength="10" maxlength="1000" required placeholder="Explicá qué necesitás corregir y por qué"></textarea>
+                                        <div class="form-text mb-2">La Subsecretaría recibe el pedido por mail. Si lo autoriza, vas a tener @SolicitudRectificacion.DiasDeHabilitacion días para presentar la rectificatoria.</div>
+                                        <button class="btn btn-primary btn-sm">Enviar pedido</button>
+                                    </form>
+                                </details>
+                                if (sol is { Estado: EstadoSolicitud.Rechazada }) { <div class="form-text">El último pedido no fue autorizado.</div> }
+                                else if (sol is { Estado: EstadoSolicitud.Habilitada }) { <div class="form-text">La autorización anterior venció.</div> }
+                            }
                         }
                     </td>
                 </tr>
             }
             </tbody>
         </table></div></div>
+
+        var hayEditables = c is not null && Model.Filas.Any(f => f.Tipo is not null && (f.Ultima is null || f.Ultima.Estado == EstadoPresentacion.Borrador));
+        <div class="panel section-gap">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("download") Cargar con Excel</h2></div>
+            <p class="form-text">Descargá una única planilla con <strong>todas tus áreas</strong> (con la columna del área y las instrucciones), completala y subila. El primer año (@(c?.Anio)) se informa mes por mes y los siguientes por año. Las celdas no pueden quedar vacías: si no hay valor, va 0. Si hay errores te decimos en qué hoja, fila y columna, y no se importa nada hasta corregirlos. También podés cargar a mano, área por área, con el botón <em>Comenzar</em> / <em>Continuar</em>.</p>
+            <div class="d-flex flex-wrap gap-3 align-items-end">
+                <a class="btn btn-outline-secondary" asp-action="PlanillaExcel" asp-route-cuit="@Model.CuitAsistido">@Url.Icono("download") Descargar planilla Excel</a>
+                @if (hayEditables)
+                {
+                    <form asp-action="Importar" method="post" enctype="multipart/form-data" data-una-vez data-confirmar="Se carga lo del archivo como borrador y se reemplaza lo que ya cargaste en las áreas incluidas. ¿Continuar?" class="d-flex flex-wrap gap-2 align-items-end">
+                        <input type="hidden" name="cuit" value="@Model.CuitAsistido" />
+                        <div><label class="form-label small mb-1" for="archivo-xlsx">Planilla completa (.xlsx)</label>
+                            <input id="archivo-xlsx" class="form-control form-control-sm" type="file" name="archivo" accept=".xlsx" required /></div>
+                        <button class="btn btn-primary btn-sm">@Url.Icono("plus") Importar planilla</button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        var sinIniciar = Model.Filas.Where(f => f.Ultima is null).ToList();
+        var enBorrador = Model.Filas.Count(f => f.Ultima?.Estado == EstadoPresentacion.Borrador);
+        var yaEnviadas = Model.Filas.Count(f => f.Ultima is { Estado: not EstadoPresentacion.Borrador });
+        var incompletas = Model.Filas.Where(f => f.Ultima?.Estado == EstadoPresentacion.Borrador && (Model.Pendientes.GetValueOrDefault(f.Ultima!.Id)?.Count ?? 0) > 0).ToList();
+        var puedeFinal = c is not null && sinIniciar.Count == 0 && incompletas.Count == 0 && enBorrador > 0;
+        <div class="panel section-gap">
+            <div class="panel__head"><h2 class="panel__title">@Url.Icono("mail") Presentación final</h2></div>
+            <p class="form-text">La presentación final envía todas las áreas juntas y <strong>solo se habilita cuando todas cumplen con los requisitos de la nota</strong>: planilla completa (con el año firme cargado), todos los anexos requeridos y sin errores. Si algo falta no se envía ninguna. Cada área recibe su propio comprobante.</p>
+            <ul class="mb-3">
+                <li>@yaEnviadas de @Model.Filas.Count área(s) ya enviada(s)</li>
+                <li>@(enBorrador - incompletas.Count) de @enBorrador en borrador completa(s)</li>
+                @if (sinIniciar.Count > 0) { <li class="text-danger">Sin iniciar: @string.Join(", ", sinIniciar.Select(f => f.Bloque.Nombre))</li> }
+                @if (incompletas.Count > 0) { <li class="text-danger">Incompletas: @string.Join(", ", incompletas.Select(f => f.Bloque.Nombre)) (el detalle de lo que falta está en la columna Estado)</li> }
+            </ul>
+            <form asp-action="EnviarFinal" method="post" data-una-vez data-confirmar="Se envían todas las áreas en borrador y después no se pueden modificar (solo rectificar con autorización). ¿Confirmás el envío final?">
+                <input type="hidden" name="cuit" value="@Model.CuitAsistido" />
+                <button class="btn btn-primary btn-lg" disabled="@(!puedeFinal)">@Url.Icono("mail") Enviar presentación final</button>
+            </form>
+        </div>
     }
 </div>

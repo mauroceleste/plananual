@@ -12,8 +12,36 @@ using PlanAnual.Web.Models;
 namespace PlanAnual.Web.Controllers;
 
 [Authorize(Policy = "Administrador")]
-public class AdminController(PlanAnualDbContext db, ILegajosClient legajos, IConfiguration config, IMailSender mail) : Controller
+public class AdminController(PlanAnualDbContext db, ILegajosClient legajos, IConfiguration config, IMailSender mail, PresentacionService svc) : Controller
 {
+    // ---------- Pedidos de rectificación de las empresas ----------
+    [HttpGet("Admin/Rectificaciones")]
+    public async Task<IActionResult> Rectificaciones() => View(await svc.ListarSolicitudesAsync());
+
+    [HttpPost("Admin/Rectificaciones/{id:long}/Habilitar")]
+    public async Task<IActionResult> Habilitar(long id)
+    {
+        try
+        {
+            var s = await svc.HabilitarAsync(id, User.ToSesion(), this.Absoluta(config, "Index", "Plan"));
+            TempData["Mensaje"] = $"Habilitada la rectificación de {s.NombreArea} ({s.RazonSocial}) hasta el {s.HabilitadaHasta:dd/MM/yyyy HH:mm}. Se le avisó a la empresa por mail.";
+        }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        return RedirectToAction(nameof(Rectificaciones));
+    }
+
+    [HttpPost("Admin/Rectificaciones/{id:long}/Rechazar")]
+    public async Task<IActionResult> Rechazar(long id)
+    {
+        try
+        {
+            var s = await svc.RechazarAsync(id, User.ToSesion());
+            TempData["Mensaje"] = $"Se rechazó el pedido de {s.RazonSocial} para {s.NombreArea}. Se le avisó a la empresa por mail.";
+        }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        return RedirectToAction(nameof(Rectificaciones));
+    }
+
     // ---------- Tipo de actividad por bloque (provisorio hasta que lo exponga Legajos de Áreas) ----------
     [HttpGet("Admin/Bloques")]
     public async Task<IActionResult> Bloques()

@@ -244,7 +244,7 @@ public static class Indicadores
 
             p.Ciclo ??= ciclo;
             var obs = Validador.Validar(p, p.Anexos.Select(x => new AnexoTipoPresentado(x.Tipo)).ToList())
-                .Where(o => !o.Mensaje.StartsWith("Falta adjuntar", StringComparison.Ordinal)).ToList();
+                .Where(o => !o.EsRequisito).ToList();   // lo que falta cumplir de la nota (anexos, meses, textos) se mide aparte, en Cumplimiento
             if (obs.Count > 0)
                 alertas.Add(new AlertaPlanilla(p.Id, p.RazonSocial, Area(p), obs.Count, (obs[0].Anio is { } an ? an + ": " : "") + obs[0].Mensaje));
         }

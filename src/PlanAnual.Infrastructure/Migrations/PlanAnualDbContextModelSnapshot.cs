@@ -17,7 +17,7 @@ namespace PlanAnual.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.22")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -204,6 +204,10 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("anio");
 
+                    b.Property<int>("Mes")
+                        .HasColumnType("integer")
+                        .HasColumnName("mes");
+
                     b.Property<string>("Campo")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
@@ -214,7 +218,7 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("valor");
 
-                    b.HasKey("PresentacionId", "Anio", "Campo")
+                    b.HasKey("PresentacionId", "Anio", "Mes", "Campo")
                         .HasName("pk_plan_valores");
 
                     b.HasIndex("Campo")
@@ -249,6 +253,11 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("ciclo_id");
 
+                    b.Property<string>("ConflictosSuperficiarios")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("conflictos_superficiarios");
+
                     b.Property<DateTime>("CreadaEn")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("creada_en");
@@ -267,6 +276,21 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("enviada_por");
+
+                    b.Property<string>("EquiposContratosFirmes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("equipos_contratos_firmes");
+
+                    b.Property<string>("EquiposCostos")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("equipos_costos");
+
+                    b.Property<string>("EquiposPlazos")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("equipos_plazos");
 
                     b.Property<int>("Estado")
                         .HasColumnType("integer")
@@ -349,6 +373,99 @@ namespace PlanAnual.Infrastructure.Migrations
                     b.ToTable("presentaciones", (string)null);
                 });
 
+            modelBuilder.Entity("PlanAnual.Domain.Entities.SolicitudRectificacion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CicloId")
+                        .HasColumnType("integer")
+                        .HasColumnName("ciclo_id");
+
+                    b.Property<string>("Cuit")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("cuit");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("integer")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime?>("HabilitadaHasta")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("habilitada_hasta");
+
+                    b.Property<int>("IdBloque")
+                        .HasColumnType("integer")
+                        .HasColumnName("id_bloque");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("motivo");
+
+                    b.Property<string>("NombreArea")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("nombre_area");
+
+                    b.Property<long>("PresentacionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("presentacion_id");
+
+                    b.Property<string>("RazonSocial")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("razon_social");
+
+                    b.Property<DateTime?>("ResueltaEn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("resuelta_en");
+
+                    b.Property<string>("ResueltaPor")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("resuelta_por");
+
+                    b.Property<string>("SolicitadaEmail")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("solicitada_email");
+
+                    b.Property<DateTime>("SolicitadaEn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("solicitada_en");
+
+                    b.Property<string>("SolicitadaPor")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("solicitada_por");
+
+                    b.HasKey("Id")
+                        .HasName("pk_solicitudes_rectificacion");
+
+                    b.HasIndex("Estado")
+                        .HasDatabaseName("ix_solicitudes_rectificacion_estado");
+
+                    b.HasIndex("PresentacionId")
+                        .HasDatabaseName("ix_solicitudes_rectificacion_presentacion_id");
+
+                    b.HasIndex("CicloId", "Cuit", "IdBloque")
+                        .HasDatabaseName("ix_solicitudes_rectificacion_ciclo_id_cuit_id_bloque");
+
+                    b.ToTable("solicitudes_rectificacion", (string)null);
+                });
+
             modelBuilder.Entity("PlanAnual.Domain.Entities.Anexo", b =>
                 {
                     b.HasOne("PlanAnual.Domain.Entities.Presentacion", null)
@@ -389,6 +506,16 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasConstraintName("fk_presentaciones_ciclos_ciclo_id");
 
                     b.Navigation("Ciclo");
+                });
+
+            modelBuilder.Entity("PlanAnual.Domain.Entities.SolicitudRectificacion", b =>
+                {
+                    b.HasOne("PlanAnual.Domain.Entities.Presentacion", null)
+                        .WithMany()
+                        .HasForeignKey("PresentacionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_solicitudes_rectificacion_presentaciones_presentacion_id");
                 });
 
             modelBuilder.Entity("PlanAnual.Domain.Entities.Presentacion", b =>

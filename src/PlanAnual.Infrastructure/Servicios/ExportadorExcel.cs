@@ -28,6 +28,8 @@ public static class ExportadorExcel
         return campos;
     }
 
+    public static string GrupoDe(CampoDef c) => Grupo(c);
+
     static string Grupo(CampoDef c) => GrupoOficial.GetValueOrDefault(c.Codigo) ?? c.Grupo switch
     {
         CatalogoCampos.GProduccion => "Producción y Venta",
@@ -37,7 +39,7 @@ public static class ExportadorExcel
 
     public static byte[] Planilla(Presentacion p)
     {
-        var calc = Calculadora.CalcularPlan(p.TipoPlan, p.Valores);
+        var periodos = Calculadora.CalcularPeriodos(p.TipoPlan, p.Valores);
         var cols = Columnas(p.TipoPlan);
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Plan de Desarrollo ");
@@ -59,25 +61,43 @@ public static class ExportadorExcel
             i = j + 1;
         }
 
+        // Primer año (el de la convocatoria): un renglón por mes y un subtotal anual; después, un renglón por año.
         int fila = 5;
-        var anios = Enumerable.Range(p.AnioDesde, p.AnioHasta - p.AnioDesde + 1).ToList();
-        foreach (var anio in anios)
+        var anioMensual = p.Ciclo?.Anio ?? p.AnioDesde;
+        var filasDatos = new List<int>();      // filas que se suman en TOTAL (sin el subtotal anual, que repite los meses)
+        var filasSubtotal = new List<int>();
+        void Escribir(int f, int clave)
         {
-            ws.Cell(fila, 2).Value = anio;
+            if (!periodos.TryGetValue(clave, out var vals)) return;
             for (int i = 0; i < cols.Count; i++)
-                if (calc.GetValueOrDefault(anio) is { } f && f.TryGetValue(cols[i].Codigo, out var v) && (cols[i].EsCalculado || p.Valores.Any(x => x.Anio == anio && x.Campo == cols[i].Codigo && x.Valor.HasValue)))
-                    ws.Cell(fila, 3 + i).Value = v;
-            fila++;
+                if (vals.TryGetValue(cols[i].Codigo, out var v)) ws.Cell(f, 3 + i).Value = v;
         }
+        for (int anio = p.AnioDesde; anio <= p.AnioHasta; anio++)
+        {
+            if (anio == anioMensual)
+            {
+                for (int m = 1; m <= 12; m++) { ws.Cell(fila, 2).Value = $"{Validador.Meses[m - 1][..3]}-{anio}"; Escribir(fila, Calculadora.Clave(anio, m)); filasDatos.Add(fila); fila++; }
+                ws.Cell(fila, 2).Value = $"{anio} (total)"; Escribir(fila, Calculadora.Clave(anio, 0)); filasSubtotal.Add(fila); fila++;
+            }
+            else
+            {
+                ws.Cell(fila, 2).Value = anio; Escribir(fila, Calculadora.Clave(anio, 0));
+                filasDatos.Add(fila);
+                fila++;
+            }
+        }
+        foreach (var s in filasSubtotal) ws.Row(s).Style.Font.Bold = true;
 
+        var filasSuma = new List<(int Desde, int Hasta)>();
+        foreach (var f in filasDatos) { if (filasSuma.Count > 0 && filasSuma[^1].Hasta == f - 1) filasSuma[^1] = (filasSuma[^1].Desde, f); else filasSuma.Add((f, f)); }
         ws.Cell(fila, 2).Value = "TOTAL";
         for (int i = 0; i < cols.Count; i++)
         {
             var c = cols[i];
             bool suma = c.Unidad is "MMUSD" or "MMbbl" or "MMm3" || AditivosCantidad.Contains(c.Codigo);
-            if (suma) ws.Cell(fila, 3 + i).FormulaA1 = $"SUM({ws.Cell(5, 3 + i).Address}:{ws.Cell(fila - 1, 3 + i).Address})";
+            if (suma && filasSuma.Count > 0)
+                ws.Cell(fila, 3 + i).FormulaA1 = "SUM(" + string.Join(",", filasSuma.Select(r => r.Desde == r.Hasta ? ws.Cell(r.Desde, 3 + i).Address.ToStringRelative() : $"{ws.Cell(r.Desde, 3 + i).Address.ToStringRelative()}:{ws.Cell(r.Hasta, 3 + i).Address.ToStringRelative()}")) + ")";
         }
-
         var rango = ws.Range(2, 2, fila, 2 + cols.Count);
         rango.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         rango.Style.Border.InsideBorder = XLBorderStyleValues.Hair;
@@ -88,7 +108,7 @@ public static class ExportadorExcel
         for (int i = 0; i < cols.Count; i++)
             ws.Range(5, 3 + i, fila, 3 + i).Style.NumberFormat.Format =
                 cols[i].DecimalesMax == 0 ? "#,##0" : cols[i].DecimalesMax == 2 ? "#,##0.00" : "#,##0.00####";
-        ws.Column(2).Width = 10; ws.Columns(3, 2 + cols.Count).Width = 16; ws.Row(3).Height = 48;
+        ws.Column(2).Width = 14; ws.Columns(3, 2 + cols.Count).Width = 16; ws.Row(3).Height = 48;
         ws.SheetView.FreezeRows(4); ws.SheetView.FreezeColumns(2);
 
         // Datos de la presentación: trazabilidad de lo que se está leyendo.

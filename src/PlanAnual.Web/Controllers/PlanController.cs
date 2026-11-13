@@ -37,7 +37,9 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
             var bloques = (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).OrderBy(b => b.Nombre).ToList();
             var tipos = await tiposProvider.TodosAsync();
             var ultimas = vm.Ciclo is null ? [] : await svc.UltimasPorBloqueAsync(vm.Ciclo.Id, cuits);
-            vm.Filas = bloques.Select(b => new FilaArea(b, tipos.TryGetValue(b.IdBloque, out var t) ? t : (TipoPlan?)null, ultimas.GetValueOrDefault(b.IdBloque))).ToList();
+            var solicitudes = vm.Ciclo is null ? [] : await svc.UltimasSolicitudesAsync(vm.Ciclo.Id, cuits);
+            vm.Filas = bloques.Select(b => new FilaArea(b, tipos.TryGetValue(b.IdBloque, out var t) ? t : (TipoPlan?)null, ultimas.GetValueOrDefault(b.IdBloque), solicitudes.GetValueOrDefault(b.IdBloque))).ToList();
+            vm.Pendientes = await svc.PendientesAsync(vm.Filas.Where(f => f.Ultima?.Estado == EstadoPresentacion.Borrador).Select(f => f.Ultima!.Id));
             vm.RazonAsistida = bloques.FirstOrDefault()?.RazonSocial;
         }
         catch (HttpRequestException)
@@ -69,6 +71,38 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
+    [HttpPost]
+    public async Task<IActionResult> SolicitarRectificacion(long id, string? motivo, string? cuit)
+    {
+        try
+        {
+            await svc.SolicitarRectificacionAsync(id, User.ToSesion(), motivo, this.Absoluta(config, nameof(AdminController.Rectificaciones), "Admin"));
+            TempData["Mensaje"] = "Enviamos tu pedido a la Subsecretaría. Cuando lo autorice te avisamos por mail y vas a tener 7 días para presentar la rectificatoria.";
+        }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Index), new { cuit });
+    }
+
+    /// <summary>Envía de una vez todas las áreas en borrador de la empresa (todo o nada).</summary>
+    [HttpPost]
+    public async Task<IActionResult> EnviarFinal(string? cuit)
+    {
+        var u = User.ToSesion();
+        IReadOnlyList<string> cuits = u.Rol == Rol.Administrador ? (string.IsNullOrEmpty(cuit) || !cuit.All(char.IsDigit) ? [] : [cuit]) : u.Cuits;
+        try
+        {
+            var bloques = (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).ToList();
+            var r = await svc.EnviarFinalAsync(u, bloques, id => this.Absoluta(config, nameof(Comprobante), "Plan", new { id }));
+            if (r.Problemas.Count > 0) TempData["Problemas"] = string.Join("\n", r.Problemas);
+            else TempData["Mensaje"] = $"La presentación final fue enviada: {r.Enviadas} área(s). Te mandamos un comprobante por cada una.";
+        }
+        catch (HttpRequestException) { TempData["Error"] = "No se pudo consultar Legajos de Áreas en este momento. Probá de nuevo en unos minutos."; }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Index), new { cuit });
+    }
+
     // ---------- Formulario por pasos ----------
     [HttpGet("Plan/Editar/{id:long}")]
     public async Task<IActionResult> Editar(long id, int paso = 0)
@@ -80,12 +114,21 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         var vm = new EditarVm
         {
             P = p, Pasos = PasosDe(p.TipoPlan), SoloLectura = p.Estado != EstadoPresentacion.Borrador || !u.PuedeEditar(p.Cuit),
-            Calc = Calculadora.CalcularPlan(p.TipoPlan, p.Valores),
-            Ingresados = p.Valores.Where(v => v.Valor.HasValue).ToDictionary(v => (v.Anio, v.Campo), v => v.Valor!.Value),
+            Calc = Calculadora.CalcularPeriodos(p.TipoPlan, p.Valores),
+            Ingresados = p.Valores.Where(v => v.Valor.HasValue).ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor!.Value),
         };
         vm.PasoActual = Math.Clamp(paso, 0, vm.Pasos.Count - 1);
         if (vm.Actual.Tipo == TipoPaso.Revision) vm.Observaciones = await svc.RevisarAsync(id, u);
-        vm.Anios = Enumerable.Range(p.AnioDesde, p.AnioHasta - p.AnioDesde + 1).ToList();
+        // El primer año (el de la convocatoria) va mes por mes con su subtotal anual; los siguientes, un renglón por año.
+        for (var anio = p.AnioDesde; anio <= p.AnioHasta; anio++)
+        {
+            if (anio == p.Ciclo!.Anio)
+            {
+                for (var m = 1; m <= 12; m++) vm.Filas.Add(new FilaPeriodo(anio, m));
+                vm.Filas.Add(new FilaPeriodo(anio, 0, EsSubtotal: true));
+            }
+            else vm.Filas.Add(new FilaPeriodo(anio, 0));
+        }
         return View(vm);
     }
 
@@ -101,6 +144,25 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         }
         catch (OperacionInvalida ex) { return BadRequest(new { ok = false, error = ex.Message }); }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
+    }
+
+    /// <summary>Guarda los cuatro textos del bloque 4. Se llama solo (al salir de cada cuadro) o con el botón Guardar.</summary>
+    [HttpPost("Plan/GuardarTexto/{id:long}")]
+    public async Task<IActionResult> GuardarTexto(long id, string? conflictos, string? contratosFirmes, string? plazos, string? costos, int paso, bool ajax = false)
+    {
+        try
+        {
+            await svc.GuardarRestriccionesAsync(id, User.ToSesion(), conflictos, contratosFirmes, plazos, costos);
+            if (ajax) return Json(new { ok = true, hora = DateTime.Now.ToString("HH:mm:ss") });
+            TempData["Mensaje"] = "Guardamos las restricciones a la actividad.";
+        }
+        catch (OperacionInvalida ex)
+        {
+            if (ajax) return BadRequest(new { ok = false, error = ex.Message });
+            TempData["Error"] = ex.Message;
+        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Editar), new { id, paso });
     }
 
     [HttpPost("Plan/Rango/{id:long}")]
@@ -179,24 +241,58 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
-    // ---------- Envío ----------
-    [HttpPost]
-    public async Task<IActionResult> Enviar(long id)
+    // ---------- Planilla Excel de carga (todas las áreas) ----------
+    const string TipoXlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /// <summary>Las áreas de la empresa (o de la asistida, si entra Administración); null si Administración no indicó empresa.</summary>
+    async Task<List<BloqueInfo>?> AreasDeLaEmpresaAsync(string? cuit)
+    {
+        var u = User.ToSesion();
+        IReadOnlyList<string> cuits = u.Rol == Rol.Administrador ? (string.IsNullOrEmpty(cuit) || !cuit.All(char.IsDigit) ? [] : [cuit]) : u.Cuits;
+        if (cuits.Count == 0) return null;
+        return (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).OrderBy(b => b.Nombre).ToList();
+    }
+
+    [HttpGet("Plan/PlanillaExcel")]
+    public async Task<IActionResult> PlanillaExcel(string? cuit)
     {
         try
         {
-            // Detrás del proxy el host y el esquema internos no sirven para el mail: se usa el origen público configurado.
-            var origen = config["PublicOrigin"];
-            var url = string.IsNullOrWhiteSpace(origen)
-                ? Url.Action(nameof(Comprobante), "Plan", new { id }, Request.Scheme)!
-                : origen.TrimEnd('/') + Url.Action(nameof(Comprobante), "Plan", new { id });
-            await svc.EnviarAsync(id, User.ToSesion(), url);
-            TempData["Mensaje"] = "La presentación fue enviada. Te mandamos el comprobante por mail.";
-            return RedirectToAction(nameof(Comprobante), new { id });
+            var bloques = await AreasDeLaEmpresaAsync(cuit);
+            if (bloques is null) return RedirectToAction(nameof(Index), new { cuit });
+            var bytes = await svc.PlantillaAsync(User.ToSesion(), bloques, await tiposProvider.TodosAsync());
+            var ciclo = await svc.CicloAbiertoAsync();
+            return File(bytes, TipoXlsx, $"Plan_{ciclo?.Anio}_planilla_de_carga.xlsx");
         }
-        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; return RedirectToAction(nameof(Editar), new { id, paso = int.MaxValue }); }
+        catch (HttpRequestException) { TempData["Error"] = "No se pudo consultar Legajos de Áreas en este momento. Probá de nuevo en unos minutos."; }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
         catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Index), new { cuit });
     }
+
+    [HttpPost("Plan/Importar")]
+    [RequestSizeLimit(12_000_000)]
+    public async Task<IActionResult> Importar(IFormFile? archivo, string? cuit)
+    {
+        var vm = new ImportacionVm { CuitAsistido = cuit, NombreArchivo = archivo?.FileName };
+        try
+        {
+            if (archivo is null || archivo.Length == 0) throw new OperacionInvalida("Elegí el archivo Excel que completaste.");
+            if (archivo.Length > 10 * 1024 * 1024) throw new OperacionInvalida("El archivo supera los 10 MB.");
+            if (!string.Equals(Path.GetExtension(archivo.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase)) throw new OperacionInvalida("El archivo tiene que ser un Excel .xlsx (el que se descarga desde el sistema).");
+            var bloques = await AreasDeLaEmpresaAsync(cuit) ?? throw new OperacionInvalida("No hay áreas para importar.");
+            await using var ms = new MemoryStream();
+            await archivo.CopyToAsync(ms); ms.Position = 0;
+            var r = await svc.ImportarAsync(User.ToSesion(), bloques, await tiposProvider.TodosAsync(), ms);
+            vm.Errores = r.Errores.ToList(); vm.Truncado = r.Truncado; vm.Areas = r.Areas.ToList();
+        }
+        catch (HttpRequestException) { vm.Errores.Add(new ErrorImportacion("(sistema)", null, null, "No se pudo consultar Legajos de Áreas en este momento. Probá de nuevo en unos minutos.")); }
+        catch (OperacionInvalida ex) { vm.Errores.Add(new ErrorImportacion("(archivo)", null, null, ex.Message)); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return View("Importar", vm);
+    }
+
+    // El envío se hace solo con la presentación final (EnviarFinal): no hay envío por área suelta.
 
     [HttpGet("Plan/Comprobante/{id:long}")]
     public async Task<IActionResult> Comprobante(long id)
@@ -237,6 +333,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         var pasos = Grillas.Select((g, i) => new PasoVm(i, g.Titulo, TipoPaso.Grilla,
             CatalogoCampos.Para(plan).Where(c => g.Grupos.Contains(c.Grupo)).ToList())).ToList();
         pasos.Add(new PasoVm(pasos.Count, "Anexos", TipoPaso.Anexos, []));
+        pasos.Add(new PasoVm(pasos.Count, "Restricciones", TipoPaso.Texto, []));
         pasos.Add(new PasoVm(pasos.Count, "Revisión y envío", TipoPaso.Revision, []));
         return pasos;
     }

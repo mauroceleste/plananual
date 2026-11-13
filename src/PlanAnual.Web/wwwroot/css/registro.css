@@ -158,3 +158,18 @@ table.data-table tbody tr:hover > td { background: var(--surface-2); }
 [data-bs-theme="dark"] .nav-tabs .nav-link.active { background: var(--inst-turquesa); color: var(--inst-petroleo); }
 [data-bs-theme="dark"] .page-head { background: linear-gradient(115deg, #031a24 0%, #0b2f3e 55%, #0f3a4c 100%); }
 [data-bs-theme="dark"] .app-footer { background: #031a24; }
+
+/* Consideraciones del formulario y pedido de rectificacion */
+.consideraciones { margin: 0 0 1rem; padding: .75rem 1rem; border: 1px solid var(--bs-border-color); border-left: 4px solid var(--inst-petroleo, #00374C); border-radius: .5rem; background: var(--bs-tertiary-bg); }
+.consideraciones > summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+.consideraciones ul { margin: .75rem 0; padding-left: 1.25rem; }
+.consideraciones__unidades { width: 100%; font-size: .875rem; border-collapse: collapse; }
+.consideraciones__unidades th, .consideraciones__unidades td { padding: .35rem .5rem; border-top: 1px solid var(--bs-border-color); text-align: left; vertical-align: top; }
+.pedir-rect { min-width: 280px; }
+.pedir-rect > summary { list-style: none; display: inline-block; }
+.pedir-rect > summary::-webkit-details-marker { display: none; }
+.pedir-rect[open] { padding: .5rem 0; }
+
+/* Planilla: primer anio mensual */
+.grilla tr.es-subtotal th, .grilla tr.es-subtotal td { font-weight: 700; background: var(--bs-tertiary-bg); border-top: 2px solid var(--bs-border-color); }
+.grilla__mes { text-transform: capitalize; color: var(--bs-secondary-color); margin-left: .15rem; }

@@ -1,0 +1,49 @@
+@model List<SolicitudRectificacion>
+@{ ViewData["Title"] = "Rectificaciones"; ViewData["Ancha"] = true;
+   var ahora = DateTime.Now;
+   var pendientes = Model.Count(s => s.Estado == EstadoSolicitud.Pendiente); }
+<div class="container-xl is-wide py-4">
+    <div class="page-head"><div><span class="page-head__eyebrow">Administración</span><h1>Pedidos de rectificación</h1>
+        <p>Las empresas piden autorización para modificar un área ya enviada e indican el motivo. Al habilitar, pueden presentar la rectificatoria durante @SolicitudRectificacion.DiasDeHabilitacion días.</p></div></div>
+
+    @if (pendientes > 0) { <div class="alert alert-warning">@Url.Icono("alert")<div>Hay <strong>@pendientes</strong> pedido(s) esperando tu respuesta.</div></div> }
+
+    @if (!Model.Any())
+    {
+        <div class="empty">@Url.Icono("file")<p>Todavía no hay pedidos de rectificación.</p></div>
+    }
+    else
+    {
+        <div class="table-card"><div class="table-responsive">
+        <table class="table data-table is-cards">
+            <thead><tr><th>Empresa</th><th>Área</th><th>Motivo</th><th>Solicitado</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var s in Model)
+            {
+                <tr>
+                    <td data-label="Empresa"><span class="t-title">@s.RazonSocial</span><br /><small class="text-muted">CUIT @s.Cuit</small></td>
+                    <td data-label="Área">@s.NombreArea</td>
+                    <td data-label="Motivo" style="white-space:pre-line;max-width:420px">@s.Motivo</td>
+                    <td data-label="Solicitado">@s.SolicitadaEn.ToString("dd/MM/yyyy HH:mm")<br /><small class="text-muted">@s.SolicitadaPor</small></td>
+                    <td data-label="Estado">
+                        @if (s.Estado == EstadoSolicitud.Pendiente) { <span class="chip chip--warn">Pendiente</span> }
+                        else if (s.Estado == EstadoSolicitud.Rechazada) { <span class="chip">Rechazada</span><br /><small class="text-muted">@s.ResueltaPor · @s.ResueltaEn?.ToString("dd/MM/yyyy")</small> }
+                        else if (s.Estado == EstadoSolicitud.Usada) { <span class="chip chip--ok">Rectificada</span><br /><small class="text-muted">Habilitó @s.ResueltaPor</small> }
+                        else if (s.Vigente(ahora)) { <span class="chip chip--ok">Habilitada</span><br /><small class="text-muted">hasta @s.HabilitadaHasta?.ToString("dd/MM/yyyy HH:mm")</small> }
+                        else { <span class="chip">Venció</span><br /><small class="text-muted">el @s.HabilitadaHasta?.ToString("dd/MM/yyyy HH:mm")</small> }
+                    </td>
+                    <td class="t-actions">
+                        @if (s.Estado == EstadoSolicitud.Pendiente)
+                        {
+                            <form asp-action="Habilitar" asp-route-id="@s.Id" method="post" data-una-vez data-confirmar="Se habilita a @s.RazonSocial para rectificar @s.NombreArea durante @SolicitudRectificacion.DiasDeHabilitacion días y se le avisa por mail. ¿Confirmás?" class="d-inline">
+                                <button class="btn btn-primary btn-sm">@Url.Icono("check") Habilitar @SolicitudRectificacion.DiasDeHabilitacion días</button></form>
+                            <form asp-action="Rechazar" asp-route-id="@s.Id" method="post" data-una-vez data-confirmar="Se rechaza el pedido y se le avisa a la empresa por mail. ¿Confirmás?" class="d-inline">
+                                <button class="btn btn-ghost-danger btn-sm">Rechazar</button></form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table></div></div>
+    }
+</div>

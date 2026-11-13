@@ -2,41 +2,61 @@ using PlanAnual.Domain.Entities;
 
 namespace PlanAnual.Domain.Catalogo;
 
-public sealed record Observacion(bool EsError, string Mensaje, int? Anio = null);
+/// <param name="EsRequisito">Falta algo que pide la nota (dato del año firme, documentación o texto del bloque 4). Bloquea la presentación final aunque no sea un error de datos.</param>
+public sealed record Observacion(bool EsError, string Mensaje, int? Anio = null, bool EsRequisito = false)
+{
+    public bool Bloquea => EsError || EsRequisito;
+}
 
 /// <summary>
-/// Controles previos al envío. Los errores bloquean el envío; las advertencias se muestran
-/// pero la empresa puede enviar igual (la Subsecretaría las verá en el tablero).
+/// Controles previos al envío. Los errores y los requisitos de la nota faltantes bloquean la presentación final;
+/// el resto son advertencias de coherencia que se muestran pero no bloquean (la Subsecretaría las verá en el tablero).
 /// </summary>
 public static class Validador
 {
+    public static readonly string[] Meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+    /// <summary>Los cuatro textos del bloque 4 de la nota, en el orden en que se piden.</summary>
+    public static IReadOnlyList<(string Titulo, Func<Presentacion, string?> Valor)> TextosBloque4 { get; } =
+    [
+        ("Conflictos con superficiarios", p => p.ConflictosSuperficiarios),
+        ("Disponibilidad de equipos: contratos firmes", p => p.EquiposContratosFirmes),
+        ("Disponibilidad de equipos: plazos", p => p.EquiposPlazos),
+        ("Disponibilidad de equipos: costos", p => p.EquiposCostos),
+    ];
+
     public static List<Observacion> Validar(Presentacion p, IReadOnlyCollection<AnexoTipoPresentado> anexos)
     {
         var obs = new List<Observacion>();
         var campos = CatalogoCampos.Para(p.TipoPlan);
         var calc = Calculadora.CalcularPlan(p.TipoPlan, p.Valores);
+        int? anioFirme = p.Ciclo?.Anio;
 
         foreach (var v in p.Valores.Where(v => v.Valor.HasValue))
         {
             var c = campos.FirstOrDefault(x => x.Codigo == v.Campo);
             if (c is null) { obs.Add(new(true, $"El campo '{v.Campo}' no pertenece a este tipo de planilla.", v.Anio)); continue; }
+            if (anioFirme is { } af && (v.Anio == af ? v.Mes is < 1 or > 12 : v.Mes != 0))
+            { obs.Add(new(false, v.Anio == af ? $"{c.Nombre}: el año {af} se carga mes por mes." : $"{c.Nombre}: a partir de {af + 1} los valores son anuales.", v.Anio, EsRequisito: true)); continue; }
             var motivo = ReglasDeDatos.Motivo(c, v.Valor!.Value);
-            if (motivo is not null) obs.Add(new(true, motivo, v.Anio));
+            if (motivo is not null) obs.Add(new(true, v.Mes > 0 ? $"{Meses[Math.Clamp(v.Mes, 1, 12) - 1]}: {motivo}" : motivo, v.Anio));
         }
 
         if (!p.Valores.Any(v => v.Valor.HasValue))
             obs.Add(new(true, "La planilla no tiene ningún dato cargado."));
 
-        // El año del ciclo es compromiso firme: debe estar completo en los bloques principales.
-        if (p.Ciclo is not null)
+        // El primer año (el de la convocatoria) es compromiso firme y se carga por mes: debe estar completo en los campos principales.
+        if (anioFirme is { } firme)
         {
-            var anioFirme = p.Ciclo.Anio;
-            if (!p.Valores.Any(v => v.Anio == anioFirme && v.Valor.HasValue))
-                obs.Add(new(true, $"Falta cargar el año {anioFirme}, que se considera compromiso firme de cumplimiento."));
+            if (!p.Valores.Any(v => v.Anio == firme && v.Valor.HasValue))
+                obs.Add(new(true, $"Falta cargar el año {firme}, que se considera compromiso firme de cumplimiento."));
             else
                 foreach (var cod in new[] { "pozos_perforados", "prod_petroleo", "prod_gas" })
-                    if (!p.Valores.Any(v => v.Anio == anioFirme && v.Campo == cod && v.Valor.HasValue))
-                        obs.Add(new(false, $"{anioFirme}: {campos.First(c => c.Codigo == cod).Nombre} está vacío. Si es cero, cargá 0.", anioFirme));
+                {
+                    var faltan = Enumerable.Range(1, 12).Where(m => !p.Valores.Any(v => v.Anio == firme && v.Mes == m && v.Campo == cod && v.Valor.HasValue)).ToList();
+                    if (faltan.Count > 0)
+                        obs.Add(new(false, $"{campos.First(c => c.Codigo == cod).Nombre}: faltan {faltan.Count} mes(es) ({string.Join(", ", faltan.Select(m => Meses[m - 1]))}). Si es cero, cargá 0.", firme, EsRequisito: true));
+                }
         }
 
         decimal previo = 0;
@@ -57,7 +77,11 @@ public static class Validador
 
         foreach (var req in AnexosRequeridos.Todos.Where(a => a.Obligatorio))
             if (!anexos.Any(a => a.Tipo == req.Codigo))
-                obs.Add(new(false, $"Falta adjuntar: {req.Nombre}."));
+                obs.Add(new(false, $"Falta adjuntar: {req.Titulo(anioFirme ?? p.AnioDesde)}.", EsRequisito: true));
+
+        foreach (var (titulo, valor) in TextosBloque4)
+            if (string.IsNullOrWhiteSpace(valor(p)))
+                obs.Add(new(false, $"Restricciones a la actividad: falta completar «{titulo}» (si no hay, escribí «Ninguno»).", EsRequisito: true));
 
         return obs;
     }

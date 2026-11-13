@@ -12,6 +12,7 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
     public DbSet<PlanValor> PlanValores => Set<PlanValor>();
     public DbSet<Anexo> Anexos => Set<Anexo>();
     public DbSet<EnvioMail> EnviosMail => Set<EnvioMail>();
+    public DbSet<SolicitudRectificacion> SolicitudesRectificacion => Set<SolicitudRectificacion>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -41,6 +42,10 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
             e.Property(x => x.UsuarioNombre).HasMaxLength(150);
             e.Property(x => x.EnviadaPor).HasMaxLength(150);
             e.Property(x => x.AsistidaPor).HasMaxLength(150);
+            e.Property(x => x.ConflictosSuperficiarios).HasMaxLength(4000);
+            e.Property(x => x.EquiposContratosFirmes).HasMaxLength(4000);
+            e.Property(x => x.EquiposPlazos).HasMaxLength(4000);
+            e.Property(x => x.EquiposCostos).HasMaxLength(4000);
             e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque, x.Version }).IsUnique();
             e.HasIndex(x => x.NumeroComprobante).IsUnique();
             e.HasOne(x => x.Ciclo).WithMany().HasForeignKey(x => x.CicloId).OnDelete(DeleteBehavior.Restrict);   // borrar una convocatoria nunca debe llevarse las presentaciones
@@ -50,7 +55,7 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
 
         b.Entity<PlanValor>(e =>
         {
-            e.HasKey(x => new { x.PresentacionId, x.Anio, x.Campo });
+            e.HasKey(x => new { x.PresentacionId, x.Anio, x.Mes, x.Campo });
             e.Property(x => x.Campo).HasMaxLength(40);
             e.Property(x => x.Valor).HasPrecision(18, 6);
             e.HasIndex(x => x.Campo);
@@ -62,6 +67,20 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
             e.Property(x => x.NombreArchivo).HasMaxLength(255);
             e.Property(x => x.RutaAlmacenada).HasMaxLength(500);
             e.Property(x => x.Sha256).HasMaxLength(64);
+        });
+
+        b.Entity<SolicitudRectificacion>(e =>
+        {
+            e.Property(x => x.Cuit).HasMaxLength(11);
+            e.Property(x => x.RazonSocial).HasMaxLength(150);
+            e.Property(x => x.NombreArea).HasMaxLength(150);
+            e.Property(x => x.Motivo).HasMaxLength(1000);
+            e.Property(x => x.SolicitadaPor).HasMaxLength(150);
+            e.Property(x => x.SolicitadaEmail).HasMaxLength(150);
+            e.Property(x => x.ResueltaPor).HasMaxLength(150);
+            e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque });
+            e.HasIndex(x => x.Estado);
+            e.HasOne<Presentacion>().WithMany().HasForeignKey(x => x.PresentacionId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<EnvioMail>(e =>

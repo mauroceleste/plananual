@@ -68,15 +68,26 @@ public class Presentacion
     public string? HuellaEnvio { get; set; }
     public string? Observaciones { get; set; }
 
+    // Bloque 4 de la nota: restricciones a la actividad (texto, hasta que se defina una planilla modelo).
+    public string? ConflictosSuperficiarios { get; set; }
+    public string? EquiposContratosFirmes { get; set; }
+    public string? EquiposPlazos { get; set; }
+    public string? EquiposCostos { get; set; }
+
     public List<PlanValor> Valores { get; set; } = new();
     public List<Anexo> Anexos { get; set; } = new();
 }
 
-/// <summary>Una celda de la planilla: año + código de campo del catálogo + valor.</summary>
+/// <summary>
+/// Una celda de la planilla: año + mes + código de campo del catálogo + valor. El año de la convocatoria se carga por mes
+/// (Mes 1 a 12); los años siguientes son anuales (Mes 0).
+/// </summary>
 public class PlanValor
 {
     public long PresentacionId { get; set; }
     public int Anio { get; set; }
+    /// <summary>0 = valor anual; 1 a 12 = mes (solo en el primer año de la planilla).</summary>
+    public int Mes { get; set; }
     public string Campo { get; set; } = "";
     public decimal? Valor { get; set; }
 }
@@ -92,6 +103,36 @@ public class Anexo
     public long Tamano { get; set; }
     public string Sha256 { get; set; } = "";
     public DateTime SubidoEn { get; set; }
+}
+
+public enum EstadoSolicitud { Pendiente = 1, Habilitada = 2, Rechazada = 3, Usada = 4 }
+
+/// <summary>
+/// Pedido de una empresa para rectificar un área ya enviada. Administración lo habilita por un plazo
+/// (7 días) o lo rechaza; la rectificatoria solo se puede crear, editar y enviar mientras la habilitación esté vigente.
+/// </summary>
+public class SolicitudRectificacion
+{
+    public const int DiasDeHabilitacion = 7;
+
+    public long Id { get; set; }
+    public int CicloId { get; set; }
+    public string Cuit { get; set; } = "";
+    public string RazonSocial { get; set; } = "";
+    public int IdBloque { get; set; }
+    public string NombreArea { get; set; } = "";
+    /// <summary>Versión enviada que la empresa quiere corregir.</summary>
+    public long PresentacionId { get; set; }
+    public string Motivo { get; set; } = "";
+    public string SolicitadaPor { get; set; } = "";
+    public string SolicitadaEmail { get; set; } = "";
+    public DateTime SolicitadaEn { get; set; }
+    public EstadoSolicitud Estado { get; set; } = EstadoSolicitud.Pendiente;
+    public string? ResueltaPor { get; set; }
+    public DateTime? ResueltaEn { get; set; }
+    public DateTime? HabilitadaHasta { get; set; }
+
+    public bool Vigente(DateTime ahora) => Estado == EstadoSolicitud.Habilitada && HabilitadaHasta > ahora;
 }
 
 public class EnvioMail

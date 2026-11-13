@@ -1,0 +1,36 @@
+@model ImportacionVm
+@{ ViewData["Title"] = "Importar planilla"; ViewData["Ancha"] = true;
+   var ok = !Model.Errores.Any(); }
+<div class="container-xl is-wide py-4">
+    <div class="page-head"><div><span class="page-head__eyebrow">Plan de Inversiones</span><h1>Importar planilla</h1>
+        <p>@(Model.NombreArchivo ?? "Archivo")</p></div>
+        <a class="btn btn-outline-secondary" asp-action="Index" asp-route-cuit="@Model.CuitAsistido">@Url.Icono("arrow-left") Mis áreas</a></div>
+
+    @if (ok)
+    {
+        <div class="alert alert-success">@Url.Icono("check")<div><strong>La planilla se importó sin errores.</strong> Se cargaron como borrador @Model.Areas.Count área(s):
+            <ul class="mb-0">@foreach (var a in Model.Areas) { <li>@a</li> }</ul>
+            Revisalas y completá los anexos y las restricciones antes de la presentación final.</div></div>
+        <a class="btn btn-primary" asp-action="Index" asp-route-cuit="@Model.CuitAsistido">Ir a Mis áreas</a>
+    }
+    else
+    {
+        <div class="alert alert-danger">@Url.Icono("alert")<div><strong>No se importó nada.</strong> Corregí @(Model.Truncado ? "al menos " : "")los @Model.Errores.Count error(es) de abajo en el Excel y volvé a subirlo.@(Model.Truncado ? " Se muestran los primeros; al corregirlos pueden aparecer otros." : "")</div></div>
+        <div class="table-card"><div class="table-responsive">
+        <table class="table data-table is-cards">
+            <thead><tr><th>Hoja</th><th>Fila</th><th>Columna</th><th>Qué pasa</th></tr></thead>
+            <tbody>
+            @foreach (var e in Model.Errores)
+            {
+                <tr>
+                    <td data-label="Hoja">@e.Hoja</td>
+                    <td data-label="Fila" class="t-num">@e.Fila</td>
+                    <td data-label="Columna">@e.Columna</td>
+                    <td data-label="Qué pasa">@e.Mensaje</td>
+                </tr>
+            }
+            </tbody>
+        </table></div></div>
+        <p class="mt-3"><a class="btn btn-outline-secondary" asp-action="Index" asp-route-cuit="@Model.CuitAsistido">@Url.Icono("arrow-left") Volver a Mis áreas</a></p>
+    }
+</div>

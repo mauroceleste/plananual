@@ -35,7 +35,7 @@
         if (!tabla) return;
         tabla.querySelectorAll('output[data-total]').forEach(function (out) {
             var cod = out.dataset.total, suma = 0, alguno = false;
-            tabla.querySelectorAll('tbody tr').forEach(function (tr) {
+            tabla.querySelectorAll('tbody tr:not(.es-subtotal)').forEach(function (tr) {   // el subtotal anual repite los meses: no se suma de nuevo
                 var inp = tr.querySelector('input[data-campo="' + cod + '"]');
                 var v = null;
                 if (inp) v = inp.classList.contains('is-invalid') ? null : parsear(inp.value);
@@ -59,18 +59,19 @@
     var timer = null, enVuelo = null;
 
     function encolar(tr, inp, valor) {
-        pendientes.set(tr.dataset.anio + '|' + inp.dataset.campo, { anio: parseInt(tr.dataset.anio, 10), campo: inp.dataset.campo, valor: valor });
+        pendientes.set(tr.dataset.clave + '|' + inp.dataset.campo, { anio: parseInt(tr.dataset.anio, 10), mes: parseInt(tr.dataset.mes || '0', 10), campo: inp.dataset.campo, valor: valor });
         mostrar('Guardando…', 'is-saving');
         clearTimeout(timer);
         timer = setTimeout(enviar, 500);
     }
 
     function aplicarFilas(filas) {
-        Object.keys(filas).forEach(function (anio) {
-            var tr = tabla.querySelector('tr[data-anio="' + anio + '"]');
+        // Las filas vuelven por clave (año*100+mes); la clave año*100 es el subtotal anual del primer año o un año posterior.
+        Object.keys(filas).forEach(function (clave) {
+            var tr = tabla.querySelector('tr[data-clave="' + clave + '"]');
             if (!tr) return;
             tr.querySelectorAll('output[data-calc]').forEach(function (o) {
-                var v = filas[anio][o.dataset.calc];
+                var v = filas[clave][o.dataset.calc];
                 if (v === undefined || v === null) { o.textContent = ''; o.dataset.v = ''; }
                 else { o.textContent = fmt2(v); o.dataset.v = String(v); }
             });
@@ -98,7 +99,7 @@
             if (j && j.ok) { aplicarFilas(j.filas); if (pendientes.size === 0) { if (tabla.querySelector('input.is-invalid')) mostrar('Hay celdas con valores inválidos (en rojo): no se guardan hasta que las corrijas.', 'is-error'); else if (tabla.querySelector('input.is-ambiguo')) mostrar('Revisá las celdas en amarillo: el punto se tomó como separador de miles (1.500 = 1500). Para decimales usá coma.', 'is-saving'); else mostrar('Guardado a las ' + j.hora, 'is-ok'); } }
         }).catch(function () {
             // Sin conexión: se vuelve a encolar lo que no fue pisado por una edición más nueva y se reintenta.
-            lote.forEach(function (c) { var k = c.anio + '|' + c.campo; if (!pendientes.has(k)) pendientes.set(k, c); });
+            lote.forEach(function (c) { var k = (c.anio * 100 + c.mes) + '|' + c.campo; if (!pendientes.has(k)) pendientes.set(k, c); });
             mostrar('Sin conexión. Reintentando…', 'is-error');
             timer = setTimeout(enviar, 5000);
         }).then(function () {
@@ -121,7 +122,7 @@
         if (!ok && msg) mostrar(msg, 'is-error');
     }
 
-    function nombreDe(inp) { return (inp.getAttribute('aria-label') || '').replace(/,\s*\d{4}$/, ''); }
+    function nombreDe(inp) { return (inp.getAttribute('aria-label') || '').replace(/,\s*([a-záéíóúñ]+\s)?\d{4}$/i, ''); }
     function aplicarTexto(inp, txt) {
         var tr = inp.closest('tr'), v = parsear(txt), dec = parseInt(inp.dataset.dec, 10), max = inp.dataset.max ? parseFloat(inp.dataset.max) : null;
         var f = Math.pow(10, dec);
@@ -177,6 +178,7 @@
         var dir = e.key === 'Enter' ? (e.shiftKey ? -1 : 1) : e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
         if (!dir) return;
         var tr = inp.closest('tr'), sib = dir > 0 ? tr.nextElementSibling : tr.previousElementSibling;
+        if (sib && sib.classList.contains('es-subtotal')) sib = dir > 0 ? sib.nextElementSibling : sib.previousElementSibling;   // el subtotal anual no se edita
         var dest = sib && sib.querySelector('input[data-campo="' + inp.dataset.campo + '"]');
         if (dest) { e.preventDefault(); if (e.key === 'Enter') inp.dispatchEvent(new Event('change', { bubbles: true })); dest.focus(); dest.select(); }
     });
@@ -187,7 +189,7 @@
         var texto = (e.clipboardData || window.clipboardData).getData('text');
         if (!/[\t\n]/.test(texto.replace(/[\r\n]+$/, ''))) return;   // un solo valor: pegado normal
         e.preventDefault();
-        var filas = Array.from(tabla.querySelectorAll('tbody tr'));
+        var filas = Array.from(tabla.querySelectorAll('tbody tr:not(.es-subtotal)'));
         var r0 = filas.indexOf(inp.closest('tr'));
         var c0 = Array.from(inp.closest('tr').querySelectorAll('input[data-campo]')).indexOf(inp);
         texto.replace(/[\r\n]+$/, '').split(/\r?\n/).forEach(function (linea, i) {

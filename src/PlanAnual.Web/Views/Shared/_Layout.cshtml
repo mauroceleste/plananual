@@ -60,6 +60,7 @@
                         <button type="button" class="side-acc__btn@(enAdmin ? "" : " collapsed")" data-bs-toggle="collapse" data-bs-target="#g-adm" aria-expanded="@(enAdmin ? "true" : "false")" aria-controls="g-adm"><span>Administración</span>@Url.Icono("chev")</button>
                         <div class="collapse@(enAdmin ? " show" : "")" id="g-adm" data-bs-parent="#side-acc">
                             <a asp-controller="Admin" asp-action="Ciclo" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Ciclo"))">@Url.Icono("calendar")Convocatoria</a>
+                            <a asp-controller="Admin" asp-action="Rectificaciones" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Rectificaciones"))">@Url.Icono("edit")Rectificaciones</a>
                             <a asp-controller="Admin" asp-action="Correo" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Correo"))">@Url.Icono("mail")Correo</a>
                             <a asp-controller="Admin" asp-action="Bloques" class="app-nav__link@(Activo(seccion == "Admin" && accion == "Bloques"))">@Url.Icono("tag")Tipo de actividad</a>
                         </div>

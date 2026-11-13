@@ -7,6 +7,9 @@ namespace PlanAnual.Domain.Catalogo;
 /// a Excel y el tablero se generan desde este catálogo: agregar o corregir un campo no
 /// requiere migración de base de datos.
 /// </summary>
+/// <summary>Cómo se pasa de los doce meses del primer año al valor anual.</summary>
+public enum Agregacion { Suma, Promedio, Maximo, Ultimo }
+
 public sealed record CampoDef(
     string Codigo,
     string Grupo,
@@ -23,11 +26,35 @@ public sealed record CampoDef(
     /// <summary>Cuántos decimales admite la celda: 0 = número entero. El máximo (6) es lo que guarda la base de datos.</summary>
     public int DecimalesMax => Entero ? 0 : Decimales;
     public bool EsCalculado => Suma is not null;
+
+    /// <summary>
+    /// Flujos (inversión, gastos, producción, ventas, cantidades): se suman. Capacidades diarias y precios: promedio.
+    /// Equipos y set de fracturas: máximo del año. Desarrollo de recursos (acumulado): el último mes.
+    /// </summary>
+    public Agregacion Agregacion => Codigo is "equipos_perforacion" or "set_fracturas" ? Agregacion.Maximo
+        : Codigo == "desarrollo_recursos" ? Agregacion.Ultimo
+        : Unidad is "bbl/d" or "MMm3/d" or "USD/bbl" or "USD/MMBtu" ? Agregacion.Promedio
+        : Agregacion.Suma;
     public bool Aplica(TipoPlan plan) => Planes.Contains(plan);
 }
 
 public static class CatalogoCampos
 {
+    /// <summary>Qué significa cada unidad que aparece en las planillas (para las consideraciones del formulario).</summary>
+    public static string DescripcionUnidad(string unidad) => unidad switch
+    {
+        "MMUSD" => "millones de dólares estadounidenses (1 = USD 1.000.000)",
+        "#" => "cantidad (unidades)",
+        "MMm3" => "millones de metros cúbicos",
+        "MMbbl" => "millones de barriles",
+        "bbl/d" => "barriles por día",
+        "MMm3/d" => "millones de metros cúbicos por día",
+        "USD/bbl" => "dólares estadounidenses por barril",
+        "USD/MMBtu" => "dólares estadounidenses por millón de BTU",
+        "%" => "porcentaje (por ejemplo, 12,5 = 12,5 %)",
+        _ => unidad
+    };
+
     static readonly TipoPlan[] Ambos = { TipoPlan.Convencional, TipoPlan.Cench };
     static readonly TipoPlan[] Conv = { TipoPlan.Convencional };
     static readonly TipoPlan[] Cench = { TipoPlan.Cench };
