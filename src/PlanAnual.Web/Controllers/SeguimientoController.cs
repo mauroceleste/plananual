@@ -13,9 +13,10 @@ namespace PlanAnual.Web.Controllers;
 [Authorize(Policy = "Subsecretaria")]
 public class SeguimientoController(PresentacionService svc, ILegajosClient legajos, PlanAnualDbContext db) : Controller
 {
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int? anio = null)
     {
-        var vm = new SeguimientoVm { Ciclo = await svc.CicloAbiertoAsync() };
+        var vm = new SeguimientoVm { Ciclo = await svc.CicloParaConsultaAsync(anio), Convocatorias = await svc.CiclosAsync() };
+        vm.EsVigente = vm.Ciclo is not null && vm.Ciclo.Id == (await svc.CicloAbiertoAsync())?.Id;
         try
         {
             var bloques = await legajos.TodosLosBloquesAsync();

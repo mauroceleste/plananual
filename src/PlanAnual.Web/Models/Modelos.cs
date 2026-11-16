@@ -68,6 +68,9 @@ public sealed record EmpresaSeguimiento(string Cuit, string Razon, int Bloques, 
 public sealed class SeguimientoVm
 {
     public Ciclo? Ciclo { get; set; }
+    public List<Ciclo> Convocatorias { get; set; } = [];
+    /// <summary>Si la convocatoria que se mira es la abierta (solo en esa se puede asistir a una empresa).</summary>
+    public bool EsVigente { get; set; }
     public List<EmpresaSeguimiento> Empresas { get; set; } = [];
     public List<Presentacion> Recientes { get; set; } = [];
     public string? ErrorServicio { get; set; }
@@ -82,6 +85,7 @@ public sealed record FilaTipo(BloqueInfo Bloque, TipoPlan? Tipo, TipoPlan? Segun
 public sealed class TableroVm
 {
     public Ciclo? Ciclo { get; set; }
+    public List<Ciclo> Convocatorias { get; set; } = [];
     public DatosTablero? Datos { get; set; }
     public TipoPlan? Tipo { get; set; }
     public string? Cuit { get; set; }

@@ -1,11 +1,12 @@
 @model SeguimientoVm
 @{ ViewData["Title"] = "Presentaciones"; ViewData["Ancha"] = true;
-   var c = Model.Ciclo; var esAdmin = User.ToSesion().Rol == Rol.Administrador;
+   var c = Model.Ciclo; var esAdmin = User.ToSesion().Rol == Rol.Administrador && Model.EsVigente;   // asistir solo en la convocatoria abierta
    string Chip(string e) => e switch { "Completa" => "chip--ok", "Parcial" => "chip--warn", "En carga" => "chip--warn", _ => "chip--danger" }; }
 <div class="container-xl is-wide py-4">
     <div class="page-head">
         <div><span class="page-head__eyebrow">@(c?.Nombre ?? "Plan de Inversiones")</span><h1>Presentaciones</h1>
             <p>Estado de la carga por empresa. Una empresa está completa cuando envió todas sus áreas.</p></div>
+        <partial name="_SelectorConvocatoria" model="@((Model.Convocatorias, Model.Ciclo, new Dictionary<string, string?>()))" />
     </div>
     @if (Model.ErrorServicio is not null) { <div class="alert alert-danger">@Url.Icono("alert")<div>@Model.ErrorServicio</div></div> }
 

@@ -1,0 +1,19 @@
+@* Selector de convocatoria para consultar años anteriores. Solo se muestra si hay más de una. Model: (convocatorias, la que se mira, filtros a conservar) *@
+@model (List<PlanAnual.Domain.Entities.Ciclo> Lista, PlanAnual.Domain.Entities.Ciclo? Actual, Dictionary<string, string?> Filtros)
+@if (Model.Lista.Count > 1)
+{
+    <form method="get" class="d-flex align-items-center gap-2" aria-label="Convocatoria">
+        @foreach (var f in Model.Filtros.Where(f => !string.IsNullOrEmpty(f.Value)))
+        {
+            <input type="hidden" name="@f.Key" value="@f.Value" />
+        }
+        <label for="anio" class="form-label mb-0 small text-muted">Convocatoria</label>
+        <select id="anio" name="anio" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+            @foreach (var c in Model.Lista)
+            {
+                <option value="@c.Anio" selected="@(Model.Actual?.Id == c.Id)">@c.Anio@(c.Abierto ? "" : " (cerrada)")</option>
+            }
+        </select>
+        <noscript><button class="btn btn-sm btn-outline-secondary" type="submit">Ver</button></noscript>
+    </form>
+}

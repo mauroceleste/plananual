@@ -48,6 +48,23 @@ public sealed partial class PresentacionServiceTests : IDisposable
         await svc.GuardarCeldasAsync(id, Ana, [new(2026, "pozos_perforados", 4, 1), new(2026, "prod_petroleo", 0.8m, 1), new(2026, "prod_gas", 12, 1), new(2026, "inv_perforacion", 3, 1)]);
 
 
+    // ---------- Selector de convocatoria ----------
+
+    [Fact]
+    public async Task Se_puede_consultar_una_convocatoria_anterior_con_sus_datos()
+    {
+        var p = await BorradorDeAna();                                   // presentación de la convocatoria 2026
+        db.Ciclos.Add(new Ciclo { Anio = 2027, Nombre = "Plan 2027", FechaLimite = new(2099, 1, 1) });
+        await db.SaveChangesAsync();
+
+        Assert.Equal([2027, 2026], (await svc.CiclosAsync()).Select(c => c.Anio));
+        Assert.Equal(2027, (await svc.CicloParaConsultaAsync(null))!.Anio);          // sin pedir año: la abierta más nueva
+        var vieja = await svc.CicloParaConsultaAsync(2026);
+        Assert.Equal(2026, vieja!.Anio);
+        Assert.Equal(p.Id, (await svc.UltimasPorBloqueAsync(vieja.Id, ["111"]))[BloqueAlfa.IdBloque].Id);
+        Assert.Equal(2027, (await svc.CicloParaConsultaAsync(1999))!.Anio);          // año inexistente: cae a la abierta
+    }
+
     // ---------- Acceso entre empresas ----------
 
     [Fact]

@@ -9,11 +9,11 @@ namespace PlanAnual.Web.Controllers;
 [Authorize(Policy = "Subsecretaria")]
 public class TableroController(TableroService tablero, PresentacionService presentaciones) : Controller
 {
-    public async Task<IActionResult> Index(TipoPlan? tipo, string? cuit, int anios = 10)
+    public async Task<IActionResult> Index(TipoPlan? tipo, string? cuit, int anios = 10, int? anio = null)
     {
         if (cuit is not null && !cuit.All(char.IsDigit)) cuit = null;
         if (anios is not (0 or 5 or 10 or 15)) anios = 10;
-        var vm = new TableroVm { Ciclo = await presentaciones.CicloAbiertoAsync(), Tipo = tipo, Cuit = cuit, Anios = anios };
+        var vm = new TableroVm { Ciclo = await presentaciones.CicloParaConsultaAsync(anio), Convocatorias = await presentaciones.CiclosAsync(), Tipo = tipo, Cuit = cuit, Anios = anios };
         if (vm.Ciclo is null) return View(vm);
         try
         {

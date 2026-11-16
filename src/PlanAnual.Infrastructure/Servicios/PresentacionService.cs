@@ -32,6 +32,17 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
     public Task<Ciclo?> CicloAbiertoAsync() =>
         db.Ciclos.Where(c => c.Abierto).OrderByDescending(c => c.Anio).FirstOrDefaultAsync();
 
+    /// <summary>Todas las convocatorias, la más nueva primero (para el selector de la Subsecretaría).</summary>
+    public Task<List<Ciclo>> CiclosAsync() =>
+        db.Ciclos.AsNoTracking().OrderByDescending(c => c.Anio).ToListAsync();
+
+    /// <summary>La convocatoria del año pedido; si no existe o no se pide ninguna, la abierta.</summary>
+    public async Task<Ciclo?> CicloParaConsultaAsync(int? anio)
+    {
+        if (anio is not null && await db.Ciclos.FirstOrDefaultAsync(c => c.Anio == anio) is { } c) return c;
+        return await CicloAbiertoAsync();
+    }
+
     /// <summary>Última versión de cada bloque (la que se muestra en "Mis áreas").</summary>
     public async Task<Dictionary<int, Presentacion>> UltimasPorBloqueAsync(int cicloId, IEnumerable<string> cuits)
     {

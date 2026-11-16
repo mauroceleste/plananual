@@ -38,7 +38,10 @@
     <div class="page-head">
         <div><span class="page-head__eyebrow">@(Model.Ciclo?.Nombre ?? "Plan de Inversiones")</span><h1>Tablero</h1>
             <p>Lo que las empresas se comprometieron a invertir, perforar y producir. Cuenta la última versión enviada de cada área.</p></div>
-        <a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index">@Url.Icono("clock") Estado de presentaciones</a>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <partial name="_SelectorConvocatoria" model="@((Model.Convocatorias, Model.Ciclo, new Dictionary<string, string?> { ["tipo"] = Model.Tipo is null ? null : ((int)Model.Tipo).ToString(), ["cuit"] = Model.Cuit, ["anios"] = Model.Anios.ToString() }))" />
+            <a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index" asp-route-anio="@Model.Ciclo?.Anio">@Url.Icono("clock") Estado de presentaciones</a>
+        </div>
     </div>
 
     @if (Model.Ciclo is null) { <div class="alert alert-warning">@Url.Icono("alert")<div>No hay una convocatoria abierta.</div></div> }
@@ -46,6 +49,7 @@
     else if (d is not null)
     {
         <form method="get" class="filtros-tablero" id="filtros" aria-label="Filtros del tablero">
+            <input type="hidden" name="anio" value="@Model.Ciclo!.Anio" />
             <div><label for="tipo">Tipo de plan</label>
                 <select class="form-select" id="tipo" name="tipo">
                     <option value="">Todos</option>
@@ -64,7 +68,7 @@
                     <option value="15" selected="@(Model.Anios == 15)">15 años</option>
                     <option value="0" selected="@(Model.Anios == 0)">Todos los cargados</option>
                 </select></div>
-            @if (Model.Tipo is not null || Model.Cuit is not null) { <a class="btn btn-ghost btn-sm" asp-action="Index">Quitar filtros</a> }
+            @if (Model.Tipo is not null || Model.Cuit is not null) { <a class="btn btn-ghost btn-sm" asp-action="Index" asp-route-anio="@Model.Ciclo.Anio">Quitar filtros</a> }
         </form>
 
         @if (d.Presentaciones == 0)
