@@ -36,7 +36,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         {
             var bloques = (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).OrderBy(b => b.Nombre).ToList();
             var tipos = await tiposProvider.TodosAsync();
-            var ultimas = vm.Ciclo is null ? [] : await svc.UltimasPorBloqueAsync(vm.Ciclo.Id, cuits);
+            var ultimas = vm.Ciclo is null ? [] : await svc.UltimasPorBloqueAsync(vm.Ciclo.Id, cuits, conAnexos: u.Rol == Rol.Administrador);
             var solicitudes = vm.Ciclo is null ? [] : await svc.UltimasSolicitudesAsync(vm.Ciclo.Id, cuits);
             vm.Filas = bloques.Select(b => new FilaArea(b, tipos.TryGetValue(b.IdBloque, out var t) ? t : (TipoPlan?)null, ultimas.GetValueOrDefault(b.IdBloque), solicitudes.GetValueOrDefault(b.IdBloque))).ToList();
             vm.Pendientes = await svc.PendientesAsync(vm.Filas.Where(f => f.Ultima?.Estado == EstadoPresentacion.Borrador).Select(f => f.Ultima!.Id));
@@ -69,6 +69,16 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         try { var p = await svc.RectificarAsync(id, User.ToSesion()); return RedirectToAction(nameof(Editar), new { id = p.Id }); }
         catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; return RedirectToAction(nameof(Index), new { cuit }); }
         catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    /// <summary>Número de expediente de GDE de un área (solo Administración).</summary>
+    [HttpPost]
+    public async Task<IActionResult> GuardarExpediente(long id, string? expediente, string? cuit)
+    {
+        try { await svc.GuardarExpedienteAsync(id, User.ToSesion(), expediente); TempData["Mensaje"] = "Expediente guardado."; }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Index), new { cuit });
     }
 
     [HttpPost]

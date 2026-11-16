@@ -73,6 +73,8 @@ public class Presentacion
     public string? EquiposContratosFirmes { get; set; }
     public string? EquiposPlazos { get; set; }
     public string? EquiposCostos { get; set; }
+    /// <summary>Número de expediente de GDE, lo carga la Subsecretaría (dato interno: no lo ve la empresa).</summary>
+    public string? ExpedienteGde { get; set; }
 
     public List<PlanValor> Valores { get; set; } = new();
     public List<Anexo> Anexos { get; set; } = new();

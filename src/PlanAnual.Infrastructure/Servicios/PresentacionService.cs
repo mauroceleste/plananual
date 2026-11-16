@@ -44,11 +44,12 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
     }
 
     /// <summary>Última versión de cada bloque (la que se muestra en "Mis áreas").</summary>
-    public async Task<Dictionary<int, Presentacion>> UltimasPorBloqueAsync(int cicloId, IEnumerable<string> cuits)
+    public async Task<Dictionary<int, Presentacion>> UltimasPorBloqueAsync(int cicloId, IEnumerable<string> cuits, bool conAnexos = false)
     {
         var lista = cuits.ToList();
-        var todas = await db.Presentaciones.AsNoTracking()
-            .Where(p => p.CicloId == cicloId && lista.Contains(p.Cuit)).ToListAsync();
+        IQueryable<Presentacion> q = db.Presentaciones.AsNoTracking();
+        if (conAnexos) q = q.Include(p => p.Anexos);
+        var todas = await q.Where(p => p.CicloId == cicloId && lista.Contains(p.Cuit)).ToListAsync();
         return todas.GroupBy(p => p.IdBloque).ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.Version).First());
     }
 
@@ -85,6 +86,18 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         return p;
     }
 
+    /// <summary>Número de expediente de GDE de un área. Solo Administración; vale en cualquier estado (no es parte del plan) y vacío lo borra.</summary>
+    public async Task GuardarExpedienteAsync(long id, UsuarioSesion u, string? expediente)
+    {
+        if (u.Rol != Rol.Administrador) throw new UnauthorizedAccessException();
+        var p = await db.Presentaciones.FirstOrDefaultAsync(x => x.Id == id) ?? throw new OperacionInvalida("La presentación no existe.");
+        var limpio = string.IsNullOrWhiteSpace(expediente) ? null : expediente.Trim();
+        if (limpio is { Length: > 80 }) throw new OperacionInvalida("El número de expediente es demasiado largo (máximo 80 caracteres).");
+        if (limpio is not null && limpio.Any(char.IsControl)) throw new OperacionInvalida("El número de expediente tiene caracteres no válidos.");
+        p.ExpedienteGde = limpio;
+        await db.SaveChangesAsync();
+    }
+
     public async Task<Presentacion> RectificarAsync(long id, UsuarioSesion u)
     {
         var origen = await ObtenerAsync(id, u);
@@ -104,7 +117,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             Estado = EstadoPresentacion.Borrador, UsuarioId = u.Id, UsuarioNombre = u.Nombre, UsuarioEmail = u.Email,
             CreadaEn = ahora, ModificadaEn = ahora,
             ConflictosSuperficiarios = origen.ConflictosSuperficiarios, EquiposContratosFirmes = origen.EquiposContratosFirmes,
-            EquiposPlazos = origen.EquiposPlazos, EquiposCostos = origen.EquiposCostos,
+            EquiposPlazos = origen.EquiposPlazos, EquiposCostos = origen.EquiposCostos, ExpedienteGde = origen.ExpedienteGde,
             Valores = origen.Valores.Select(v => new PlanValor { Anio = v.Anio, Mes = v.Mes, Campo = v.Campo, Valor = v.Valor }).ToList(),
             Anexos = origen.Anexos.Select(a => new Anexo
             {

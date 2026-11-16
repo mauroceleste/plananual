@@ -296,6 +296,11 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("estado");
 
+                    b.Property<string>("ExpedienteGde")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("expediente_gde");
+
                     b.Property<string>("HuellaEnvio")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")

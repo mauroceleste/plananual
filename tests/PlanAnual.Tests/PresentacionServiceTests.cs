@@ -254,6 +254,28 @@ public sealed partial class PresentacionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task El_expediente_de_GDE_lo_carga_solo_Administracion_y_pasa_a_la_rectificatoria()
+    {
+        var p = await BorradorDeAna();
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.GuardarExpedienteAsync(p.Id, Ana, "EX-1"));   // la empresa no puede
+        await svc.GuardarExpedienteAsync(p.Id, Admin, "  EX-2026-00012345-NEU-SSH  ");
+        Assert.Equal("EX-2026-00012345-NEU-SSH", (await db.Presentaciones.AsNoTracking().FirstAsync(x => x.Id == p.Id)).ExpedienteGde);
+
+        await Assert.ThrowsAsync<OperacionInvalida>(() => svc.GuardarExpedienteAsync(p.Id, Admin, new string('9', 81)));
+        await Assert.ThrowsAsync<OperacionInvalida>(() => svc.GuardarExpedienteAsync(p.Id, Admin, "EX\n1"));
+        await Assert.ThrowsAsync<OperacionInvalida>(() => svc.GuardarExpedienteAsync(99999, Admin, "EX-1"));
+
+        await CargarLoMinimo(p.Id);
+        var v1 = await svc.EnviarAsync(p.Id, Ana, "http://x");
+        await svc.GuardarExpedienteAsync(v1.Id, Admin, "EX-ENVIADA");                  // vale también con el área enviada
+        var v2 = await svc.RectificarAsync(v1.Id, Admin);
+        Assert.Equal("EX-ENVIADA", v2.ExpedienteGde);                                  // la rectificatoria lo conserva
+
+        await svc.GuardarExpedienteAsync(v2.Id, Admin, "  ");                          // vacío lo borra
+        Assert.Null((await db.Presentaciones.AsNoTracking().FirstAsync(x => x.Id == v2.Id)).ExpedienteGde);
+    }
+
+    [Fact]
     public async Task Una_presentacion_enviada_no_se_modifica_y_se_corrige_con_una_rectificatoria()
     {
         var p = await BorradorDeAna();

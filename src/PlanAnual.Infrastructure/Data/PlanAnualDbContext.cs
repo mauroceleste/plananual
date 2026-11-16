@@ -46,6 +46,7 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
             e.Property(x => x.EquiposContratosFirmes).HasMaxLength(4000);
             e.Property(x => x.EquiposPlazos).HasMaxLength(4000);
             e.Property(x => x.EquiposCostos).HasMaxLength(4000);
+            e.Property(x => x.ExpedienteGde).HasMaxLength(80);
             e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque, x.Version }).IsUnique();
             e.HasIndex(x => x.NumeroComprobante).IsUnique();
             e.HasOne(x => x.Ciclo).WithMany().HasForeignKey(x => x.CicloId).OnDelete(DeleteBehavior.Restrict);   // borrar una convocatoria nunca debe llevarse las presentaciones

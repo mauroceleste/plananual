@@ -35,7 +35,7 @@
     {
         <div class="table-card"><div class="table-responsive">
         <table class="table data-table is-cards">
-            <thead><tr><th>Área</th><th>Operadora</th><th>Tipo de plan</th><th>Estado</th><th>Última modificación</th><th></th></tr></thead>
+            <thead><tr><th>Área</th><th>Operadora</th><th>Tipo de plan</th><th>Estado</th><th>Última modificación</th>@if (asiste) {<th>Adjuntos</th><th>Expediente GDE</th>}<th></th></tr></thead>
             <tbody>
             @foreach (var f in Model.Filas)
             {
@@ -56,6 +56,34 @@
                         else { <span class="chip chip--ok">Enviada v@(p.Version)</span> }
                     </td>
                     <td data-label="Última modificación">@Formato.Fecha(p?.ModificadaEn)</td>
+                    @if (asiste)
+                    {
+                        <td data-label="Adjuntos">
+                            @if (p is null || p.Anexos.Count == 0) { <span class="text-muted">—</span> }
+                            else
+                            {
+                                <details><summary class="small">@Url.Icono("paperclip") @p.Anexos.Count adjunto(s)</summary>
+                                    <ul class="small mb-0 ps-3">
+                                        @foreach (var a in p.Anexos.OrderBy(a => a.Tipo))
+                                        {
+                                            <li><span class="text-muted">@(AnexosRequeridos.Buscar(a.Tipo)?.Titulo(c?.Anio ?? 0) is { } tt ? (tt.Length > 40 ? tt[..40] + "…" : tt) : a.Tipo):</span>
+                                                <a asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@a.NombreArchivo</a></li>
+                                        }
+                                    </ul></details>
+                            }
+                        </td>
+                        <td data-label="Expediente GDE">
+                            @if (p is null) { <span class="text-muted">—</span> }
+                            else
+                            {
+                                <form asp-action="GuardarExpediente" asp-route-id="@p.Id" method="post" class="d-flex gap-1">
+                                    <input type="hidden" name="cuit" value="@Model.CuitAsistido" />
+                                    <input type="text" name="expediente" value="@p.ExpedienteGde" maxlength="80" class="form-control form-control-sm" style="min-width:12rem" placeholder="Nº de expediente" aria-label="Expediente GDE de @f.Bloque.Nombre" />
+                                    <button class="btn btn-outline-secondary btn-sm" title="Guardar expediente" aria-label="Guardar expediente">@Url.Icono("check")</button>
+                                </form>
+                            }
+                        </td>
+                    }
                     <td class="t-actions">
                         @if (p is null)
                         {
