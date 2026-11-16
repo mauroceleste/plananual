@@ -103,7 +103,7 @@ public static class PlanillasModelo
             var datos = ws.Range(primera, n, primera + FilasLibres - 1, n);
             datos.Style.Border.SetInsideBorder(XLBorderStyleValues.Thin).Border.SetOutsideBorder(XLBorderStyleValues.Thin);
             datos.Style.Border.SetInsideBorderColor(XLColor.LightGray).Border.SetOutsideBorderColor(XLColor.LightGray);
-            if (c.Lista is not null) datos.CreateDataValidation().List(string.Join(",", c.Lista), true);
+            if (c.Lista is not null) datos.CreateDataValidation().List("\"" + string.Join(",", c.Lista) + "\"", true);   // una lista escrita a mano va entre comillas
             if (c.Decimal)
             {
                 datos.Style.NumberFormat.Format = "#,##0.00";

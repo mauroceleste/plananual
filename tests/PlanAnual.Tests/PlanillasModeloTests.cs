@@ -52,3 +52,18 @@ public class PlanillasModeloTests
         Assert.Equal("Costo (USD/día)", eq.Cell(5, 6).GetString());
     }
 }
+
+public class PlanillasModeloValidacionesTests
+{
+    [Theory]
+    [InlineData("instalaciones")]
+    [InlineData("paradas")]
+    [InlineData("bloque4")]
+    public void Las_listas_desplegables_van_entre_comillas_o_Excel_descarta_la_validacion(string codigo)
+    {
+        using var wb = new ClosedXML.Excel.XLWorkbook(new MemoryStream(PlanillasModelo.Generar(codigo, 2027, "Alfa", "Área")));
+        var listas = wb.Worksheets.SelectMany(w => w.DataValidations).Where(v => v.AllowedValues == ClosedXML.Excel.XLAllowedValues.List).ToList();
+        Assert.NotEmpty(listas);
+        Assert.All(listas, v => Assert.True(v.MinValue.StartsWith('"') && v.MinValue.EndsWith('"'), v.MinValue));
+    }
+}
