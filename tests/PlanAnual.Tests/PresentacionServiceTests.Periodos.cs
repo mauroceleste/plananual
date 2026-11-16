@@ -87,10 +87,15 @@ public sealed partial class PresentacionServiceTests
         var ws = wb.Worksheet(PlanillaExcel.NombreHoja(TipoPlan.Convencional));
         var entradas = ExportadorExcel.Columnas(TipoPlan.Convencional).Select((c, i) => (c, col: PlanillaExcel.PrimeraColCampo + i)).Where(x => !x.c.EsCalculado).ToList();
         for (int r = PlanillaExcel.PrimeraFila; r <= ws.LastRowUsed()!.RowNumber(); r++)
+        {
+            if (ws.Cell(r, PlanillaExcel.ColAnio).GetValue<int>() > 2030) continue;    // la planilla trae años de más: se usan hasta 2030 y el resto queda en blanco
             foreach (var (c, col) in entradas)
                 ws.Cell(r, col).Value = c.DecimalesMax == 0 ? Math.Round(valor) : valor;
+        }
         return wb;
     }
+
+    static readonly int FilasPorArea = 12 + PlanillaExcel.AniosAnualesPorDefecto;
 
     static int ColDe(string codigo) => PlanillaExcel.PrimeraColCampo + ExportadorExcel.Columnas(TipoPlan.Convencional).ToList().FindIndex(c => c.Codigo == codigo);
 
@@ -111,8 +116,10 @@ public sealed partial class PresentacionServiceTests
         Assert.Equal(12, ws.Cell(16, PlanillaExcel.ColMes).GetValue<int>());
         Assert.Equal(2027, ws.Cell(17, PlanillaExcel.ColAnio).GetValue<int>());
         Assert.Equal("Anual", ws.Cell(17, PlanillaExcel.ColMes).GetString());
-        Assert.Equal("Área Alfa Dos", ws.Cell(21, PlanillaExcel.ColArea).GetString());          // 12 meses + 4 años = 16 filas por área
-        Assert.Equal(11, ws.Cell(21, PlanillaExcel.ColCodigo).GetValue<int>());
+        var segunda = PlanillaExcel.PrimeraFila + FilasPorArea;                                  // 12 meses + los años anuales por área
+        Assert.Equal("Área Alfa Dos", ws.Cell(segunda, PlanillaExcel.ColArea).GetString());
+        Assert.Equal(11, ws.Cell(segunda, PlanillaExcel.ColCodigo).GetValue<int>());
+        Assert.Equal(2026 + PlanillaExcel.AniosAnualesPorDefecto, ws.Cell(segunda - 1, PlanillaExcel.ColAnio).GetValue<int>());   // último año que ofrece
         Assert.True(ws.Cell(5, PlanillaExcel.PrimeraColCampo).IsEmpty());                         // vacía: la completa la empresa
         Assert.NotNull(wb.Worksheets.FirstOrDefault(w => w.Name == "Instrucciones"));
     }
@@ -258,5 +265,70 @@ public sealed partial class PresentacionServiceTests
         Assert.Equal(0, r.Enviadas);
         Assert.Equal(2, r.Problemas.Count);
         Assert.All(r.Problemas, x => { Assert.Contains("Falta adjuntar", x); Assert.Contains("Restricciones a la actividad", x); });
+    }
+
+    // ---------- Protección de la planilla y años de más ----------
+
+    [Fact]
+    public async Task La_planilla_esta_protegida_y_solo_las_celdas_de_carga_son_editables()
+    {
+        var bytes = await svc.PlantillaAsync(Ana, [BloqueAlfa, BloqueAlfa2], Tipos);
+        using var wb = new XLWorkbook(new MemoryStream(bytes));
+        var ws = wb.Worksheet(PlanillaExcel.NombreHoja(TipoPlan.Convencional));
+        var cols = ExportadorExcel.Columnas(TipoPlan.Convencional);
+
+        Assert.True(ws.IsProtected);
+        Assert.True(wb.Worksheet("Instrucciones").IsProtected);
+        foreach (var c in new[] { PlanillaExcel.ColArea, PlanillaExcel.ColCodigo, PlanillaExcel.ColAnio, PlanillaExcel.ColMes })
+            Assert.True(ws.Cell(5, c).Style.Protection.Locked, $"la columna {c} tiene que estar bloqueada");
+        for (int r = 2; r <= 4; r++) Assert.True(ws.Cell(r, PlanillaExcel.PrimeraColCampo).Style.Protection.Locked, "los encabezados están bloqueados");
+        Assert.True(ws.Cell(PlanillaExcel.FilaCodigos, PlanillaExcel.PrimeraColCampo).Style.Protection.Locked);
+
+        var ultima = ws.LastRowUsed()!.RowNumber();
+        for (int i = 0; i < cols.Count; i++)
+            foreach (var r in new[] { PlanillaExcel.PrimeraFila, 16, 17, ultima })
+                Assert.Equal(cols[i].EsCalculado, ws.Cell(r, PlanillaExcel.PrimeraColCampo + i).Style.Protection.Locked);   // calculadas bloqueadas, de carga libres
+    }
+
+    [Fact]
+    public async Task Los_anios_finales_en_blanco_no_se_importan_y_el_rango_llega_hasta_el_ultimo_usado()
+    {
+        using var wb = await PlanillaCompleta(1);    // completa hasta 2030; de 2031 en adelante queda en blanco
+        var r = await svc.ImportarAsync(Ana, [BloqueAlfa, BloqueAlfa2], Tipos, Guardar(wb));
+
+        Assert.Empty(r.Errores);
+        Assert.All(await db.Presentaciones.ToListAsync(), p => Assert.Equal(2030, p.AnioHasta));
+        Assert.DoesNotContain(await db.PlanValores.ToListAsync(), v => v.Anio > 2030);
+    }
+
+    [Fact]
+    public async Task Un_anio_posterior_a_medio_completar_o_con_un_hueco_se_rechaza()
+    {
+        using var wb = await PlanillaCompleta(1);
+        var ws = wb.Worksheet(PlanillaExcel.NombreHoja(TipoPlan.Convencional));
+        ws.Cell(18, ColDe("prod_gas")).Clear();                                   // 2028 de Alfa con una celda vacía: error de celda
+        for (int i = 0; i < 20; i++) ws.Cell(19, PlanillaExcel.PrimeraColCampo + i).Clear();   // 2029 casi en blanco...
+        ws.Cell(19, ColDe("pozos_perforados")).Value = 3;                         // ...con una sola celda: sigue siendo una fila usada
+
+        var r = await svc.ImportarAsync(Ana, [BloqueAlfa, BloqueAlfa2], Tipos, Guardar(wb));
+
+        Assert.Contains(r.Errores, e => e.Fila == 18 && e.Mensaje.Contains("celda vacía"));
+        Assert.Contains(r.Errores, e => e.Fila == 19 && e.Mensaje.Contains("celda vacía"));
+        Assert.Empty(await db.Presentaciones.ToListAsync());
+
+        using var wb2 = await PlanillaCompleta(1);
+        var ws2 = wb2.Worksheet(PlanillaExcel.NombreHoja(TipoPlan.Convencional));
+        for (int i = 0; i < 60; i++) ws2.Cell(18, PlanillaExcel.PrimeraColCampo + i).Clear();   // 2028 en blanco pero 2029 y 2030 completos: hueco
+        var hueco = await svc.ImportarAsync(Ana, [BloqueAlfa, BloqueAlfa2], Tipos, Guardar(wb2));
+        Assert.Contains(hueco.Errores, e => e.Mensaje.Contains("faltan los años") && e.Mensaje.Contains("2028"));
+    }
+
+    [Fact]
+    public void Los_adjuntos_son_solo_los_pedidos_y_Otros_es_opcional()
+    {
+        Assert.Equal(new[] { "fundamento_flujo_fondos", "flujograma", "paradas_planta", "presentacion_plan", "otro" }, AnexosRequeridos.Todos.Select(a => a.Codigo));
+        Assert.Equal(new[] { "fundamento_flujo_fondos", "flujograma", "paradas_planta", "presentacion_plan" }, AnexosRequeridos.Todos.Where(a => a.Obligatorio).Select(a => a.Codigo));
+        Assert.Equal("Paradas programadas de planta proyectadas para 2027 por área (y pérdidas de producción asociadas)", AnexosRequeridos.Buscar("paradas_planta")!.Titulo(2027));
+        Assert.Equal("Presentación del Plan Anual de Inversiones 2027", AnexosRequeridos.Buscar("presentacion_plan")!.Titulo(2027));
     }
 }

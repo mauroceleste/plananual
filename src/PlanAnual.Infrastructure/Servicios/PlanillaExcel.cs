@@ -38,12 +38,21 @@ public static class PlanillaExcel
     public const int ColArea = 1, ColCodigo = 2, ColAnio = 3, ColMes = 4, PrimeraColCampo = 5, PrimeraFila = 5, FilaCodigos = 1;
     const int MaximoErrores = 200;
 
+    /// <summary>Años anuales que trae la planilla después del primer año (cubre concesiones largas; los que no se usan se dejan en blanco).</summary>
+    public const int AniosAnualesPorDefecto = 25;
+
+    /// <summary>
+    /// Clave de protección de las hojas: evita que se modifiquen por descuido los encabezados, el código de área y las fórmulas.
+    /// Es un freno, no seguridad: lo que se importa se vuelve a validar completo.
+    /// </summary>
+    public const string ClaveProteccion = "PAI-Hidrocarburos";
+
     public static string NombreHoja(TipoPlan t) => t == TipoPlan.Cench ? "Plan CENCH" : "Plan Convencional";
 
     // ============================ Generación ============================
 
     /// <param name="aniosAnuales">Cantidad de años anuales que se ofrecen después del primer año.</param>
-    public static byte[] Generar(Ciclo ciclo, string razonSocial, IReadOnlyList<AreaPlantilla> areas, IReadOnlyList<string> areasSinTipo, int aniosAnuales = 4)
+    public static byte[] Generar(Ciclo ciclo, string razonSocial, IReadOnlyList<AreaPlantilla> areas, IReadOnlyList<string> areasSinTipo, int aniosAnuales = AniosAnualesPorDefecto)
     {
         using var wb = new XLWorkbook();
         Instrucciones(wb, ciclo, razonSocial, areas, areasSinTipo);
@@ -67,8 +76,8 @@ public static class PlanillaExcel
             "CÓMO COMPLETAR ESTA PLANILLA",
             $"1. Cada hoja (Plan Convencional / Plan CENCH) tiene una fila por mes del año {ciclo.Anio} (el primer año se informa mes por mes, y es compromiso firme) y una fila por cada año siguiente.",
             "2. Completá las celdas en blanco. NO puede quedar ninguna celda vacía: si no hay actividad o valor, ingresá 0.",
-            "3. Las celdas grises se calculan solas (no las completes). No modifiques las columnas A a D, la fila de encabezados ni los códigos ocultos.",
-            "4. Para más años, copiá la última fila de un área, pegala debajo y cambiá el año. Los años tienen que ser consecutivos y sin repetir.",
+            "3. La hoja está protegida: solo se pueden completar las celdas de carga (en blanco). Los encabezados, el área, el año, el mes y las celdas grises (que se calculan solas) están bloqueados.",
+            $"4. Completá los años hasta el último de la concesión. La planilla trae hasta {ciclo.Anio + AniosAnualesPorDefecto}: las filas de los años que no uses dejalas totalmente en blanco y no se importan. Los años tienen que ser consecutivos.",
             "5. Decimales con coma (por ejemplo 12,5). No uses letras, signos ni unidades dentro de las celdas.",
             "6. Guardá el archivo como .xlsx y subilo en Mis áreas → Importar planilla. Si hay errores, el sistema te dice en qué hoja, fila y columna, y no importa nada hasta que estén corregidos.",
             "7. Lo importado queda como borrador: podés revisarlo y completarlo en el formulario antes de la presentación final. Importar reemplaza lo que ya cargaste en las áreas incluidas en el archivo.",
@@ -92,6 +101,7 @@ public static class PlanillaExcel
         }
         for (int i = 0; i < lineas.Count; i++) ws.Cell(i + 1, 1).Value = lineas[i];
         ws.Column(1).Width = 150; ws.Column(1).Style.Alignment.WrapText = true;
+        ws.Protect(ClaveProteccion, XLProtectionAlgorithm.Algorithm.SHA512, XLSheetProtectionElements.SelectEverything);
         ws.Cell(1, 1).Style.Font.FontSize = 14;
         for (int i = 1; i <= lineas.Count; i++) if (lineas[i - 1] is "CÓMO COMPLETAR ESTA PLANILLA" or "UNIDADES DE MEDIDA" or "ÁREAS INCLUIDAS EN ESTE ARCHIVO" || lineas[i - 1].StartsWith("CÓMO SE PASA") || lineas[i - 1].StartsWith("ÁREAS SIN INCLUIR")) ws.Cell(i, 1).Style.Font.Bold = true;
     }
@@ -161,6 +171,7 @@ public static class PlanillaExcel
             var rango = ws.Range(PrimeraFila, Col(i), ultima, Col(i));
             rango.Style.NumberFormat.Format = c.DecimalesMax == 0 ? "#,##0" : c.DecimalesMax == 2 ? "#,##0.00" : "#,##0.00####";
             if (c.EsCalculado) continue;
+            rango.Style.Protection.Locked = false;   // lo único editable: las celdas de carga
             var dv = rango.CreateDataValidation();
             dv.ShowErrorMessage = true; dv.ErrorTitle = c.Nombre;
             if (c.DecimalesMax == 0) { dv.WholeNumber.Between(0, 1_000_000_000); dv.ErrorMessage = "Ingresá un número entero, 0 o mayor."; }
@@ -171,6 +182,8 @@ public static class PlanillaExcel
         ws.Columns(PrimeraColCampo, ultimaCol).Width = 16; ws.Row(3).Height = 48;
         ws.Column(ColCodigo).Hide(); ws.Row(FilaCodigos).Hide();
         ws.SheetView.FreezeRows(4); ws.SheetView.FreezeColumns(ColMes);
+        // Protegida y sin permiso de dar formato: no se pueden mostrar la columna y la fila ocultas ni cambiar nada fuera de las celdas de carga.
+        ws.Protect(ClaveProteccion, XLProtectionAlgorithm.Algorithm.SHA512, XLSheetProtectionElements.SelectEverything);
     }
 
     /// <summary>Fórmula de un campo calculado: suma de sus componentes menos los que resta (los que no son columna se abren en sus componentes).</summary>
@@ -256,6 +269,8 @@ public static class PlanillaExcel
             if (anio < anioCiclo) { Agregar(res, new(hoja, r, "Año", $"{area.Nombre}: el plan empieza en {anioCiclo}; {anio} no corresponde.")); continue; }
             if (anio == anioCiclo && mes == 0) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre}: el año {anio} se informa mes por mes (1 a 12).")); continue; }
             if (anio > anioCiclo && mes != 0) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre}: a partir de {anioCiclo + 1} los valores son anuales: dejá el mes en blanco o \"Anual\".")); continue; }
+            // Un año posterior totalmente en blanco es un año que la empresa no usa (la planilla trae de más): no se importa.
+            if (anio > anioCiclo && esperadas.All(c => ws.Cell(r, colDe[c.Codigo]).IsEmpty() || ws.Cell(r, colDe[c.Codigo]).GetString().Trim() == "")) continue;
 
             if (!porArea.TryGetValue(codigo, out var entrada))
                 porArea[codigo] = entrada = (new AreaLeida { IdBloque = codigo, Nombre = area.Nombre, Tipo = tipo }, []);

@@ -36,6 +36,6 @@
             </tbody></table></div></div>
     <div class="panel mt-4"><div class="panel__head"><h2 class="panel__title">@Url.Icono("paperclip") Anexos</h2></div>
         @if (!p.Anexos.Any()) { <p class="text-muted mb-0">No se adjuntaron anexos.</p> }
-        else { <div class="file-list">@foreach (var a in p.Anexos) { <a class="file-card" asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@Url.Icono("file")<span><strong>@a.NombreArchivo</strong><br /><small class="text-muted">@(AnexosRequeridos.Buscar(a.Tipo)?.Nombre) · @(a.Tamano / 1024) KB</small></span></a> }</div> }
+        else { <div class="file-list">@foreach (var a in p.Anexos) { <a class="file-card" asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@Url.Icono("file")<span><strong>@a.NombreArchivo</strong><br /><small class="text-muted">@(AnexosRequeridos.Buscar(a.Tipo)?.Titulo(p.Ciclo!.Anio) ?? a.Tipo) · @(a.Tamano / 1024) KB</small></span></a> }</div> }
     </div>
 </div>

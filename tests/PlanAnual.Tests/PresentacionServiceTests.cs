@@ -417,7 +417,10 @@ public sealed partial class PresentacionServiceTests : IDisposable
         Assert.Equal(0, r.Enviadas);
         var linea = Assert.Single(r.Problemas);
         Assert.Contains("Área Alfa Dos", linea);
-        Assert.Contains("Falta adjuntar: Flujograma", linea);
+        Assert.Contains("Falta adjuntar: Instalaciones", linea);
+        Assert.Contains("Falta adjuntar: Fundamentación del flujo de fondos", linea);
+        Assert.Contains("Falta adjuntar: Presentación del Plan Anual de Inversiones 2026", linea);
+        Assert.Contains("Falta adjuntar: Paradas programadas de planta proyectadas para 2026", linea);
         Assert.Contains("falta completar «Conflictos con superficiarios»", linea);
         Assert.Contains("falta completar «Disponibilidad de equipos: costos»", linea);
         Assert.All(await db.Presentaciones.AsNoTracking().ToListAsync(), p => Assert.Equal(EstadoPresentacion.Borrador, p.Estado));
