@@ -1,0 +1,34 @@
+@* Contenido del modal de observaciones internas de un área (solo Administración). data-cantidad lo usa el JS para el contador del listado. *@
+@model List<ObservacionInterna>
+@{ var cuit = (string)ViewData["Cuit"]!; var idBloque = (int)ViewData["IdBloque"]!; }
+<div data-cantidad="@Model.Count" data-cuit="@cuit" data-idbloque="@idBloque">
+    <p class="small text-muted">Son internas: la empresa no las ve.</p>
+    <form data-obs-agregar class="mb-3">
+        <input type="hidden" name="cuit" value="@cuit" /><input type="hidden" name="idBloque" value="@idBloque" />
+        <label class="form-label small" for="obs-texto">Nueva observación</label>
+        <textarea id="obs-texto" name="texto" class="form-control form-control-sm" rows="3" maxlength="@ObservacionInterna.MaximoTexto" required></textarea>
+        <div class="d-flex align-items-center gap-2 mt-2">
+            <button class="btn btn-primary btn-sm">@Url.Icono("plus") Agregar</button>
+            <span class="small text-danger" data-obs-error></span>
+        </div>
+    </form>
+    @if (Model.Count == 0)
+    {
+        <p class="text-muted mb-0">No hay observaciones para esta área.</p>
+    }
+    else
+    {
+        <ul class="list-unstyled mb-0">
+            @foreach (var o in Model)
+            {
+                <li class="py-2 border-top">
+                    <div class="d-flex justify-content-between gap-2">
+                        <span class="small text-muted">@Formato.Fecha(o.CreadaEn) · @o.UsuarioNombre</span>
+                        <button type="button" class="btn btn-ghost-danger btn-sm" data-obs-eliminar="@o.Id" title="Eliminar observación" aria-label="Eliminar observación">@Url.Icono("trash")</button>
+                    </div>
+                    <div style="white-space:pre-wrap">@o.Texto</div>
+                </li>
+            }
+        </ul>
+    }
+</div>

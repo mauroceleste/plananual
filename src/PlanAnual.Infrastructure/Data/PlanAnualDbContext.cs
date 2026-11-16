@@ -13,6 +13,7 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
     public DbSet<Anexo> Anexos => Set<Anexo>();
     public DbSet<EnvioMail> EnviosMail => Set<EnvioMail>();
     public DbSet<SolicitudRectificacion> SolicitudesRectificacion => Set<SolicitudRectificacion>();
+    public DbSet<ObservacionInterna> ObservacionesInternas => Set<ObservacionInterna>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -82,6 +83,15 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
             e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque });
             e.HasIndex(x => x.Estado);
             e.HasOne<Presentacion>().WithMany().HasForeignKey(x => x.PresentacionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<ObservacionInterna>(e =>
+        {
+            e.Property(x => x.Cuit).HasMaxLength(11);
+            e.Property(x => x.Texto).HasMaxLength(ObservacionInterna.MaximoTexto);
+            e.Property(x => x.UsuarioNombre).HasMaxLength(150);
+            e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque });
+            e.HasOne<Ciclo>().WithMany().HasForeignKey(x => x.CicloId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<EnvioMail>(e =>

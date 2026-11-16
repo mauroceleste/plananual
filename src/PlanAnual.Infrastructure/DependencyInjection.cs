@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PlanAnual.Infrastructure.Acceso;
 using PlanAnual.Infrastructure.Data;
+using PlanAnual.Infrastructure.Gde;
 using PlanAnual.Infrastructure.Legajos;
 using PlanAnual.Infrastructure.Mail;
 using PlanAnual.Infrastructure.Servicios;
@@ -35,6 +36,14 @@ public static class DependencyInjection
             c.Timeout = TimeSpan.FromSeconds(20);
         })
         .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false });
+        // GDE (solo lectura): dirección y clave del servicio interno. Sin ellas la pantalla avisa que no está configurado.
+        s.AddHttpClient<IGdeClient, GdeClient>((sp, c) =>
+        {
+            if (Uri.TryCreate((config["Gde:BaseUrl"] ?? "").TrimEnd('/') + "/", UriKind.Absolute, out var u) && !string.IsNullOrWhiteSpace(config["Gde:BaseUrl"])) c.BaseAddress = u;
+            c.Timeout = TimeSpan.FromSeconds(100);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false })
+        .AddTypedClient<IGdeClient>((h, sp) => new GdeClient(h, config["Gde:ApiKey"]));
         s.AddScoped<AutenticadorUsersAccess>();
         s.AddSingleton<IConfigurationLike>(new ConfigAdapter(config));
         s.AddSingleton<IMailSender, SmtpMailSender>();

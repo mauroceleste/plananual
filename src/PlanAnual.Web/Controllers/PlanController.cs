@@ -6,6 +6,7 @@ using PlanAnual.Domain.Catalogo;
 using PlanAnual.Domain.Entities;
 using PlanAnual.Infrastructure.Data;
 using PlanAnual.Infrastructure.Legajos;
+using PlanAnual.Infrastructure.Gde;
 using PlanAnual.Infrastructure.Servicios;
 using PlanAnual.Web.Infraestructura;
 using PlanAnual.Web.Models;
@@ -14,7 +15,7 @@ namespace PlanAnual.Web.Controllers;
 
 [Authorize]
 public class PlanController(PresentacionService svc, ILegajosClient legajos, PlanAnualDbContext db, ITipoActividadProvider tiposProvider, IConfiguration config,
-    IWebHostEnvironment env) : Controller
+    IWebHostEnvironment env, IGdeClient gde) : Controller
 {
     static readonly string[] ExtensionesPermitidas = [".pdf", ".xlsx", ".xls", ".xlsb", ".docx", ".doc", ".pptx", ".csv", ".png", ".jpg", ".jpeg", ".zip", ".kml", ".kmz"];
 
@@ -41,6 +42,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
             vm.Filas = bloques.Select(b => new FilaArea(b, tipos.TryGetValue(b.IdBloque, out var t) ? t : (TipoPlan?)null, ultimas.GetValueOrDefault(b.IdBloque), solicitudes.GetValueOrDefault(b.IdBloque))).ToList();
             vm.Pendientes = await svc.PendientesAsync(vm.Filas.Where(f => f.Ultima?.Estado == EstadoPresentacion.Borrador).Select(f => f.Ultima!.Id));
             vm.RazonAsistida = bloques.FirstOrDefault()?.RazonSocial;
+            if (vm.Ciclo is not null && u.Rol == Rol.Administrador && cuit is not null) vm.Observaciones = await svc.ConteoObservacionesAsync(u, vm.Ciclo.Id, cuit);
         }
         catch (HttpRequestException)
         {
@@ -69,6 +71,60 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         try { var p = await svc.RectificarAsync(id, User.ToSesion()); return RedirectToAction(nameof(Editar), new { id = p.Id }); }
         catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; return RedirectToAction(nameof(Index), new { cuit }); }
         catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    // ---------- Modales de Administración: adjuntos y observaciones internas de un área ----------
+
+    /// <summary>Adjuntos de un área, para el modal del listado (solo Administración).</summary>
+    [HttpGet("Plan/AdjuntosArea/{id:long}")]
+    public async Task<IActionResult> AdjuntosArea(long id)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Administrador) return Forbid();
+        try { return PartialView("_AdjuntosArea", await svc.ObtenerAsync(id, u)); }
+        catch (OperacionInvalida) { return NotFound(); }
+    }
+
+    /// <summary>Historial del expediente de GDE (pases y documentos), para el modal del listado. Solo Administración.</summary>
+    [HttpGet("Plan/HistorialExpediente")]
+    public async Task<IActionResult> HistorialExpediente(string? numero, CancellationToken ct)
+    {
+        if (User.ToSesion().Rol != Rol.Administrador) return Forbid();
+        return PartialView("_HistorialExpediente", await gde.HistorialAsync(numero ?? "", ct));
+    }
+
+    [HttpGet("Plan/ObservacionesArea")]
+    public async Task<IActionResult> ObservacionesArea(string cuit, int idBloque) => await ListaObservaciones(cuit, idBloque);
+
+    [HttpPost("Plan/AgregarObservacion")]
+    public async Task<IActionResult> AgregarObservacion(string cuit, int idBloque, string? texto)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Administrador) return Forbid();
+        var ciclo = await svc.CicloAbiertoAsync();
+        if (ciclo is null || string.IsNullOrEmpty(cuit) || !cuit.All(char.IsDigit)) return BadRequest(new { error = "Datos no válidos." });
+        try { await svc.AgregarObservacionAsync(u, ciclo.Id, cuit, idBloque, texto); }
+        catch (OperacionInvalida ex) { return BadRequest(new { error = ex.Message }); }
+        return await ListaObservaciones(cuit, idBloque);
+    }
+
+    [HttpPost("Plan/EliminarObservacion")]
+    public async Task<IActionResult> EliminarObservacion(long id)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Administrador) return Forbid();
+        try { var o = await svc.EliminarObservacionAsync(u, id); return await ListaObservaciones(o.Cuit, o.IdBloque); }
+        catch (OperacionInvalida ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    async Task<IActionResult> ListaObservaciones(string cuit, int idBloque)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Administrador) return Forbid();
+        var ciclo = await svc.CicloAbiertoAsync();
+        if (ciclo is null || string.IsNullOrEmpty(cuit) || !cuit.All(char.IsDigit)) return BadRequest(new { error = "Datos no válidos." });
+        ViewData["Cuit"] = cuit; ViewData["IdBloque"] = idBloque;
+        return PartialView("_ObservacionesArea", await svc.ObservacionesAsync(u, ciclo.Id, cuit, idBloque));
     }
 
     /// <summary>Número de expediente de GDE de un área (solo Administración).</summary>

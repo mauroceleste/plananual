@@ -194,6 +194,58 @@ namespace PlanAnual.Infrastructure.Migrations
                     b.ToTable("envios_mail", (string)null);
                 });
 
+            modelBuilder.Entity("PlanAnual.Domain.Entities.ObservacionInterna", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CicloId")
+                        .HasColumnType("integer")
+                        .HasColumnName("ciclo_id");
+
+                    b.Property<DateTime>("CreadaEn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("creada_en");
+
+                    b.Property<string>("Cuit")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("cuit");
+
+                    b.Property<int>("IdBloque")
+                        .HasColumnType("integer")
+                        .HasColumnName("id_bloque");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("texto");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("integer")
+                        .HasColumnName("usuario_id");
+
+                    b.Property<string>("UsuarioNombre")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("usuario_nombre");
+
+                    b.HasKey("Id")
+                        .HasName("pk_observaciones_internas");
+
+                    b.HasIndex("CicloId", "Cuit", "IdBloque")
+                        .HasDatabaseName("ix_observaciones_internas_ciclo_id_cuit_id_bloque");
+
+                    b.ToTable("observaciones_internas", (string)null);
+                });
+
             modelBuilder.Entity("PlanAnual.Domain.Entities.PlanValor", b =>
                 {
                     b.Property<long>("PresentacionId")
@@ -489,6 +541,16 @@ namespace PlanAnual.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_envios_mail_presentaciones_presentacion_id");
+                });
+
+            modelBuilder.Entity("PlanAnual.Domain.Entities.ObservacionInterna", b =>
+                {
+                    b.HasOne("PlanAnual.Domain.Entities.Ciclo", null)
+                        .WithMany()
+                        .HasForeignKey("CicloId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_observaciones_internas_ciclos_ciclo_id");
                 });
 
             modelBuilder.Entity("PlanAnual.Domain.Entities.PlanValor", b =>

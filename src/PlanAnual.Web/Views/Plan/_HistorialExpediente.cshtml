@@ -1,0 +1,56 @@
+@* Contenido del modal de historial del expediente (GDE). Solo Administración. *@
+@using PlanAnual.Infrastructure.Gde
+@model GdeResultado
+@if (!Model.Ok || Model.Datos is null)
+{
+    <div class="alert alert-warning mb-0">@Url.Icono("alert")<div>@Model.Mensaje</div></div>
+}
+else
+{
+    var d = Model.Datos;
+    // Más reciente primero. Si GDE no manda la fecha en formato ISO queda en el orden en que vino.
+    var movs = d.Movimientos.Select((m, i) => (m, i)).OrderByDescending(x => x.m.FechaIso ?? DateTime.MinValue).ThenBy(x => x.i).Select(x => x.m).ToList();
+    var docs = d.Documentos.OrderByDescending(x => int.TryParse(x.OrdenEnExpediente, out var n) ? n : -1).ToList();   // lo último agregado al expediente, arriba
+    <div class="mb-3">
+        <div class="fw-semibold">@d.Numero</div>
+        @if (!string.IsNullOrWhiteSpace(d.Caratula)) { <div>@d.Caratula</div> }
+        <div class="small text-muted">
+            @if (!string.IsNullOrWhiteSpace(d.EstadoActual)) { <span>Estado: <strong>@d.EstadoActual</strong> · </span> }
+            Consultado @Formato.Fecha(d.ObtenidoEn)@(Model.DesdeCache ? " (guardado hasta 30 min)" : "")
+        </div>
+    </div>
+
+    <h3 class="fs-6">Movimientos (@movs.Count)</h3>
+    @if (movs.Count == 0) { <p class="text-muted">GDE no informó movimientos.</p> }
+    else
+    {
+        <div class="table-responsive mb-3"><table class="table table-sm table-striped" data-limitada>
+            <thead><tr><th>Fecha</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Motivo</th><th>Usuario</th></tr></thead>
+            <tbody>
+            @for (var i = 0; i < movs.Count; i++)
+            {
+                var m = movs[i];
+                <tr data-fila class="@(i >= 10 ? "d-none" : "")"><td class="text-nowrap">@m.Fecha</td><td>@m.Origen</td><td>@m.Destino</td><td>@m.Estado</td><td>@m.Motivo</td><td>@m.Usuario</td></tr>
+            }
+            </tbody></table>
+            @if (movs.Count > 10) { <button type="button" class="btn btn-ghost btn-sm" data-mostrar-todas>Mostrar todas (@movs.Count)</button> }
+        </div>
+    }
+
+    <h3 class="fs-6">Documentos (@docs.Count)</h3>
+    @if (docs.Count == 0) { <p class="text-muted mb-0">GDE no informó documentos.</p> }
+    else
+    {
+        <div class="table-responsive"><table class="table table-sm table-striped" data-limitada>
+            <thead><tr><th>Número</th><th>Tipo</th><th>Referencia</th><th>Fecha</th></tr></thead>
+            <tbody>
+            @for (var i = 0; i < docs.Count; i++)
+            {
+                var x = docs[i];
+                <tr data-fila class="@(i >= 10 ? "d-none" : "")"><td class="text-nowrap">@x.Numero</td><td>@x.Tipo</td><td>@x.Referencia</td><td class="text-nowrap">@x.Fecha</td></tr>
+            }
+            </tbody></table>
+            @if (docs.Count > 10) { <button type="button" class="btn btn-ghost btn-sm" data-mostrar-todas>Mostrar todas (@docs.Count)</button> }
+        </div>
+    }
+}

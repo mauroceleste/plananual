@@ -1,0 +1,21 @@
+@* Contenido del modal de adjuntos de un área (solo Administración). *@
+@model Presentacion
+<p class="small text-muted mb-2">@Model.NombreArea · versión @Model.Version @(Model.Estado == EstadoPresentacion.Borrador ? "(borrador)" : "(enviada)")</p>
+@if (Model.Anexos.Count == 0)
+{
+    <p class="mb-0">Esta área todavía no tiene adjuntos.</p>
+}
+else
+{
+    <ul class="list-unstyled mb-0">
+        @foreach (var a in Model.Anexos.OrderBy(a => a.Tipo).ThenBy(a => a.SubidoEn))
+        {
+            var tipo = AnexosRequeridos.Buscar(a.Tipo)?.Titulo(Model.Ciclo?.Anio ?? 0) ?? a.Tipo;
+            <li class="py-2 border-bottom">
+                <div class="small text-muted">@tipo</div>
+                <a asp-action="AnexoDescargar" asp-route-id="@Model.Id" asp-route-anexoId="@a.Id">@Url.Icono("file") @a.NombreArchivo</a>
+                <small class="text-muted ms-1">@(a.Tamano < 1048576 ? (a.Tamano / 1024 + " KB") : ((a.Tamano / 1048576m).ToString("0.0", Formato.AR) + " MB")) · @Formato.Fecha(a.SubidoEn)</small>
+            </li>
+        }
+    </ul>
+}

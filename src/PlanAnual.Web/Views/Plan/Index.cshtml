@@ -35,7 +35,7 @@
     {
         <div class="table-card"><div class="table-responsive">
         <table class="table data-table is-cards">
-            <thead><tr><th>Área</th><th>Operadora</th><th>Tipo de plan</th><th>Estado</th><th>Última modificación</th>@if (asiste) {<th>Adjuntos</th><th>Expediente GDE</th>}<th></th></tr></thead>
+            <thead><tr><th>Área</th><th>Operadora</th><th>Tipo de plan</th><th>Estado</th><th>Última modificación</th>@if (asiste) {<th>Adjuntos</th><th>Obs.</th><th>Expediente GDE</th>}<th></th></tr></thead>
             <tbody>
             @foreach (var f in Model.Filas)
             {
@@ -59,18 +59,21 @@
                     @if (asiste)
                     {
                         <td data-label="Adjuntos">
-                            @if (p is null || p.Anexos.Count == 0) { <span class="text-muted">—</span> }
+                            @if (p is null) { <span class="text-muted">—</span> }
                             else
                             {
-                                <details><summary class="small">@Url.Icono("paperclip") @p.Anexos.Count adjunto(s)</summary>
-                                    <ul class="small mb-0 ps-3">
-                                        @foreach (var a in p.Anexos.OrderBy(a => a.Tipo))
-                                        {
-                                            <li><span class="text-muted">@(AnexosRequeridos.Buscar(a.Tipo)?.Titulo(c?.Anio ?? 0) is { } tt ? (tt.Length > 40 ? tt[..40] + "…" : tt) : a.Tipo):</span>
-                                                <a asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@a.NombreArchivo</a></li>
-                                        }
-                                    </ul></details>
+                                <button type="button" class="btn btn-outline-secondary btn-sm position-relative" data-adjuntos="@p.Id" data-area="@f.Bloque.Nombre" title="Ver adjuntos" aria-label="Ver adjuntos de @f.Bloque.Nombre">
+                                    @Url.Icono("paperclip")
+                                    <span class="badge rounded-pill text-bg-secondary ms-1">@p.Anexos.Count</span>
+                                </button>
                             }
+                        </td>
+                        <td data-label="Obs.">
+                            @{ var nObs = Model.Observaciones.GetValueOrDefault(f.Bloque.IdBloque); }
+                            <button type="button" class="btn btn-outline-secondary btn-sm @(nObs > 0 ? "border-warning" : "")" data-obs="@f.Bloque.IdBloque" data-cuit="@Model.CuitAsistido" data-area="@f.Bloque.Nombre" title="@(nObs > 0 ? "Ver observaciones" : "Agregar observación")" aria-label="Observaciones de @f.Bloque.Nombre">
+                                @Url.Icono("message")
+                                <span class="badge rounded-pill text-bg-warning ms-1" data-obs-n @(nObs == 0 ? "hidden" : "")>@nObs</span>
+                            </button>
                         </td>
                         <td data-label="Expediente GDE">
                             @if (p is null) { <span class="text-muted">—</span> }
@@ -80,6 +83,10 @@
                                     <input type="hidden" name="cuit" value="@Model.CuitAsistido" />
                                     <input type="text" name="expediente" value="@p.ExpedienteGde" maxlength="80" class="form-control form-control-sm" style="min-width:12rem" placeholder="Nº de expediente" aria-label="Expediente GDE de @f.Bloque.Nombre" />
                                     <button class="btn btn-outline-secondary btn-sm" title="Guardar expediente" aria-label="Guardar expediente">@Url.Icono("check")</button>
+                                    @if (!string.IsNullOrWhiteSpace(p.ExpedienteGde))
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-historial="@p.ExpedienteGde" data-area="@f.Bloque.Nombre" title="Ver historial del expediente en GDE" aria-label="Ver historial del expediente de @f.Bloque.Nombre">@Url.Icono("clock")</button>
+                                    }
                                 </form>
                             }
                         </td>
@@ -163,3 +170,19 @@
         </div>
     }
 </div>
+
+@if (Model.CuitAsistido is not null)
+{
+    <div class="modal fade" id="modal-area" tabindex="-1" aria-labelledby="modal-area-titulo" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header"><h2 class="modal-title fs-5" id="modal-area-titulo"></h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <div class="modal-body" id="modal-area-cuerpo"></div>
+            </div>
+        </div>
+    </div>
+
+}
+
+@section Scripts { <script src="~/js/admin-areas.js" asp-append-version="true"></script> }

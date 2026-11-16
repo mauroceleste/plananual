@@ -17,6 +17,8 @@ public sealed class MisAreasVm
     /// <summary>Si Administración está asistiendo a una empresa: su CUIT y razón social.</summary>
     public string? CuitAsistido { get; set; }
     public string? RazonAsistida { get; set; }
+    /// <summary>Cantidad de observaciones internas por área (solo se carga para Administración).</summary>
+    public Dictionary<int, int> Observaciones { get; set; } = [];
 }
 
 public enum TipoPaso { Grilla, Anexos, Texto, Revision }

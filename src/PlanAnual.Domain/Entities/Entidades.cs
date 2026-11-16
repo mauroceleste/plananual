@@ -137,6 +137,24 @@ public class SolicitudRectificacion
     public bool Vigente(DateTime ahora) => Estado == EstadoSolicitud.Habilitada && HabilitadaHasta > ahora;
 }
 
+/// <summary>
+/// Observación interna de la Subsecretaría sobre un área (no la ve la empresa). Se liga al área y a la convocatoria, no a una
+/// versión: sigue ahí cuando la empresa rectifica.
+/// </summary>
+public class ObservacionInterna
+{
+    public const int MaximoTexto = 2000;
+
+    public long Id { get; set; }
+    public int CicloId { get; set; }
+    public string Cuit { get; set; } = "";
+    public int IdBloque { get; set; }
+    public string Texto { get; set; } = "";
+    public int UsuarioId { get; set; }
+    public string UsuarioNombre { get; set; } = "";
+    public DateTime CreadaEn { get; set; }
+}
+
 public class EnvioMail
 {
     public long Id { get; set; }

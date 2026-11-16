@@ -98,6 +98,49 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         await db.SaveChangesAsync();
     }
 
+    // ---------- Observaciones internas (solo Administración) ----------
+
+    static void SoloAdmin(UsuarioSesion u) { if (u.Rol != Rol.Administrador) throw new UnauthorizedAccessException(); }
+
+    /// <summary>Cantidad de observaciones por área de una empresa en la convocatoria (para el contador del listado).</summary>
+    public async Task<Dictionary<int, int>> ConteoObservacionesAsync(UsuarioSesion u, int cicloId, string cuit)
+    {
+        SoloAdmin(u);
+        return await db.ObservacionesInternas.AsNoTracking().Where(o => o.CicloId == cicloId && o.Cuit == cuit)
+            .GroupBy(o => o.IdBloque).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N);
+    }
+
+    public async Task<List<ObservacionInterna>> ObservacionesAsync(UsuarioSesion u, int cicloId, string cuit, int idBloque)
+    {
+        SoloAdmin(u);
+        return await db.ObservacionesInternas.AsNoTracking().Where(o => o.CicloId == cicloId && o.Cuit == cuit && o.IdBloque == idBloque)
+            .OrderByDescending(o => o.CreadaEn).ThenByDescending(o => o.Id).ToListAsync();
+    }
+
+    public async Task AgregarObservacionAsync(UsuarioSesion u, int cicloId, string cuit, int idBloque, string? texto)
+    {
+        SoloAdmin(u);
+        var limpio = texto?.Trim();
+        if (string.IsNullOrEmpty(limpio)) throw new OperacionInvalida("Escribí la observación.");
+        if (limpio.Length > ObservacionInterna.MaximoTexto) throw new OperacionInvalida($"La observación es demasiado larga (máximo {ObservacionInterna.MaximoTexto} caracteres).");
+        db.ObservacionesInternas.Add(new ObservacionInterna
+        {
+            CicloId = cicloId, Cuit = cuit, IdBloque = idBloque, Texto = limpio,
+            UsuarioId = u.Id, UsuarioNombre = u.Nombre, CreadaEn = DateTime.Now
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Borra una observación y devuelve el área a la que pertenecía (para redibujar la lista).</summary>
+    public async Task<ObservacionInterna> EliminarObservacionAsync(UsuarioSesion u, long id)
+    {
+        SoloAdmin(u);
+        var o = await db.ObservacionesInternas.FirstOrDefaultAsync(x => x.Id == id) ?? throw new OperacionInvalida("La observación no existe.");
+        db.ObservacionesInternas.Remove(o);
+        await db.SaveChangesAsync();
+        return o;
+    }
+
     public async Task<Presentacion> RectificarAsync(long id, UsuarioSesion u)
     {
         var origen = await ObtenerAsync(id, u);

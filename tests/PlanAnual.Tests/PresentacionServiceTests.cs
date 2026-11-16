@@ -276,6 +276,42 @@ public sealed partial class PresentacionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Las_observaciones_internas_son_solo_de_Administracion_y_sobreviven_a_la_rectificatoria()
+    {
+        var ciclo = (await svc.CicloAbiertoAsync())!;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.AgregarObservacionAsync(Ana, ciclo.Id, "111", 10, "x"));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ObservacionesAsync(Ana, ciclo.Id, "111", 10));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ConteoObservacionesAsync(Ana, ciclo.Id, "111"));
+
+        await Assert.ThrowsAsync<OperacionInvalida>(() => svc.AgregarObservacionAsync(Admin, ciclo.Id, "111", 10, "   "));
+        await Assert.ThrowsAsync<OperacionInvalida>(() => svc.AgregarObservacionAsync(Admin, ciclo.Id, "111", 10, new string('a', ObservacionInterna.MaximoTexto + 1)));
+
+        await svc.AgregarObservacionAsync(Admin, ciclo.Id, "111", 10, "  Falta el flujograma firmado  ");
+        await svc.AgregarObservacionAsync(Admin, ciclo.Id, "111", 10, "Se pidió por mail");
+        await svc.AgregarObservacionAsync(Admin, ciclo.Id, "111", 11, "Otra área");
+        await svc.AgregarObservacionAsync(Admin, ciclo.Id, "222", 10, "Otra empresa");
+
+        var lista = await svc.ObservacionesAsync(Admin, ciclo.Id, "111", 10);
+        Assert.Equal(2, lista.Count);
+        Assert.Equal("Se pidió por mail", lista[0].Texto);                       // la más nueva primero
+        Assert.Equal("Falta el flujograma firmado", lista[1].Texto);             // recortada
+        Assert.Equal("Admin", lista[0].UsuarioNombre);
+        var conteo = await svc.ConteoObservacionesAsync(Admin, ciclo.Id, "111");
+        Assert.Equal(2, conteo[10]); Assert.Equal(1, conteo[11]); Assert.False(conteo.ContainsKey(99));
+
+        // La empresa trabaja el área (borrador, envío, rectificatoria): las observaciones siguen ahí, porque cuelgan del área.
+        var p = await BorradorDeAna(); await CargarLoMinimo(p.Id);
+        var v1 = await svc.EnviarAsync(p.Id, Ana, "http://x"); await svc.RectificarAsync(v1.Id, Admin);
+        Assert.Equal(2, (await svc.ObservacionesAsync(Admin, ciclo.Id, "111", 10)).Count);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.EliminarObservacionAsync(Ana, lista[0].Id));
+        var borrada = await svc.EliminarObservacionAsync(Admin, lista[0].Id);
+        Assert.Equal((10, "111"), (borrada.IdBloque, borrada.Cuit));
+        Assert.Single(await svc.ObservacionesAsync(Admin, ciclo.Id, "111", 10));
+        await Assert.ThrowsAsync<OperacionInvalida>(() => svc.EliminarObservacionAsync(Admin, lista[0].Id));
+    }
+
+    [Fact]
     public async Task Una_presentacion_enviada_no_se_modifica_y_se_corrige_con_una_rectificatoria()
     {
         var p = await BorradorDeAna();
