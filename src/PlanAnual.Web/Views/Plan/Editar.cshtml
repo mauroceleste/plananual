@@ -151,6 +151,10 @@
                             @if (t.Obligatorio) { <span class="chip @(subidos.Any() ? "chip--ok" : "chip--warn")">@(subidos.Any() ? "Presentado" : "Requerido")</span> }
                             else if (subidos.Any()) { <span class="chip chip--ok">Presentado</span> }
                         </div>
+                        @if (PlanillasModelo.DeAnexo(t.Codigo) is { } modelo)
+                        {
+                            <div class="form-text">@Url.Icono("download") <a asp-action="PlanillaModelo" asp-route-id="@p.Id" asp-route-tipo="@modelo">Descargar la planilla modelo</a> (Excel) para completarla y adjuntarla acá.</div>
+                        }
                         @foreach (var a in subidos)
                         {
                             <div class="anexos__archivo">
@@ -188,7 +192,8 @@
         };
         <div class="panel">
             <div class="panel__head"><h2 class="panel__title">@Url.Icono("alert") Restricciones a la actividad</h2></div>
-            <p class="form-text">Bloque 4 de la nota. Completá los cuatro puntos; si en alguno no hay nada para informar, escribí <strong>Ninguno</strong>. Se guarda solo al salir de cada cuadro.</p>
+            <p class="form-text">Bloque 4 de la nota. Completá los cuatro puntos; si en alguno no hay nada para informar, escribí <strong>Ninguno</strong>. Se guarda solo al salir de cada cuadro.
+                Si preferís ordenar la información antes, <a asp-action="PlanillaModelo" asp-route-id="@p.Id" asp-route-tipo="@PlanillasModelo.Bloque4">descargá la planilla modelo</a> (conflictos y equipos): sirve de guía para redactar los textos, y se puede adjuntar en «Otros» del paso de documentación.</p>
             <form asp-action="GuardarTexto" asp-route-id="@p.Id" method="post" id="form-texto" data-ro="@(ro ? "1" : "0")" data-ajax="@Url.Action("GuardarTexto", "Plan", new { id = p.Id })">
                 <input type="hidden" name="paso" value="@paso.Indice" />
                 @foreach (var t in textos)

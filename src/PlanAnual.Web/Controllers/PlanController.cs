@@ -253,6 +253,19 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         return (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).OrderBy(b => b.Nombre).ToList();
     }
 
+    /// <summary>Planilla modelo de los bloques 2 a 4 (instalaciones, paradas de planta, conflictos y equipos), con los datos del área.</summary>
+    [HttpGet("Plan/PlanillaModelo/{id:long}")]
+    public async Task<IActionResult> PlanillaModelo(long id, string tipo)
+    {
+        if (!PlanillasModelo.Existe(tipo)) return NotFound();
+        Presentacion p;
+        try { p = await svc.ObtenerAsync(id, User.ToSesion(), conDetalle: false); } catch (OperacionInvalida) { return NotFound(); } catch (UnauthorizedAccessException) { return Forbid(); }
+        var anio = p.Ciclo?.Anio ?? DateTime.Today.Year;
+        var bytes = PlanillasModelo.Generar(tipo, anio, p.RazonSocial, p.NombreArea);
+        var nombre = string.Concat($"Plan_{anio}_{p.NombreArea}_{PlanillasModelo.Nombre(tipo)}".Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_'));
+        return File(bytes, TipoXlsx, nombre + ".xlsx");
+    }
+
     [HttpGet("Plan/PlanillaExcel")]
     public async Task<IActionResult> PlanillaExcel(string? cuit)
     {
