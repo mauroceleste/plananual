@@ -252,6 +252,10 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("presentacion_id");
 
+                    b.Property<int>("Actividad")
+                        .HasColumnType("integer")
+                        .HasColumnName("actividad");
+
                     b.Property<int>("Anio")
                         .HasColumnType("integer")
                         .HasColumnName("anio");
@@ -270,7 +274,7 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("valor");
 
-                    b.HasKey("PresentacionId", "Anio", "Mes", "Campo")
+                    b.HasKey("PresentacionId", "Actividad", "Anio", "Mes", "Campo")
                         .HasName("pk_plan_valores");
 
                     b.HasIndex("Campo")

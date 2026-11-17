@@ -19,6 +19,8 @@ public sealed class MisAreasVm
     public string? RazonAsistida { get; set; }
     /// <summary>Cantidad de observaciones internas por área (solo se carga para Administración).</summary>
     public Dictionary<int, int> Observaciones { get; set; } = [];
+    /// <summary>Planes de actividad cargados por presentación (Convencional y/o No Convencional).</summary>
+    public Dictionary<long, List<TipoPlan>> Actividades { get; set; } = [];
 }
 
 public enum TipoPaso { Grilla, Anexos, Texto, Revision }
@@ -34,6 +36,10 @@ public sealed record PasoVm(int Indice, string Titulo, TipoPaso Tipo, List<Campo
 public sealed class EditarVm
 {
     public required Presentacion P { get; init; }
+    /// <summary>Plan de actividad que se está editando (Convencional o No Convencional).</summary>
+    public required TipoPlan TipoActual { get; init; }
+    /// <summary>Planes que ya tienen valores cargados.</summary>
+    public required IReadOnlyList<TipoPlan> Cargados { get; init; }
     public required List<PasoVm> Pasos { get; init; }
     public required bool SoloLectura { get; init; }
     /// <summary>Filas calculadas por clave (año*100+mes; mes 0 = anual o subtotal anual).</summary>
@@ -58,7 +64,8 @@ public sealed class EditarVm
 public sealed class ComprobanteVm
 {
     public required Presentacion P { get; init; }
-    public required SortedDictionary<int, Dictionary<string, decimal>> Calc { get; init; }
+    /// <summary>Un resumen por plan de actividad cargado (Convencional y/o No Convencional).</summary>
+    public required List<(TipoPlan Tipo, SortedDictionary<int, Dictionary<string, decimal>> Calc)> Planes { get; init; }
     public EnvioMail? Mail { get; init; }
 }
 

@@ -67,10 +67,10 @@ public static class Agregador
     public static DatosTablero Calcular(IReadOnlyCollection<Presentacion> enviadas, int anioFirme, int cantidadAnios = 5)
     {
         var anios = Enumerable.Range(anioFirme, cantidadAnios).ToList();
-        var calc = enviadas.ToDictionary(p => p.Id, p => Calculadora.CalcularPlan(p.TipoPlan, p.Valores));
+        var calc = enviadas.ToDictionary(p => (p.Id, p.TipoPlan), p => Calculadora.CalcularPlan(p.TipoPlan, p.Valores));
 
         decimal V(Presentacion p, int anio, string campo) =>
-            calc[p.Id].TryGetValue(anio, out var f) && f.TryGetValue(campo, out var v) ? v : 0m;
+            calc[(p.Id, p.TipoPlan)].TryGetValue(anio, out var f) && f.TryGetValue(campo, out var v) ? v : 0m;
 
         // En CENCH "Desarrollo" es un solo campo; en Convencionales ya viene abierto en perforación y terminación.
         decimal Rubro(Presentacion p, int anio, string campo) =>

@@ -25,12 +25,44 @@ public static class Validador
         ("Disponibilidad de equipos: costos", p => p.EquiposCostos),
     ];
 
+    public static string NombreActividad(TipoPlan t) => t == TipoPlan.Cench ? "Plan No Convencional (CENCH)" : "Plan Convencional";
+
     public static List<Observacion> Validar(Presentacion p, IReadOnlyCollection<AnexoTipoPresentado> anexos)
+    {
+        var obs = new List<Observacion>();
+        int? anioFirme = p.Ciclo?.Anio;
+
+        // Un área puede tener plan Convencional y No Convencional: cada uno se controla por separado. Lo que no tiene hay que
+        // declararlo («sin actividad», todo en 0): así la Subsecretaría distingue «no tiene» de «se olvidó».
+        var cargados = p.TiposCargados();
+        if (!p.Valores.Any(v => v.Valor.HasValue))
+            obs.Add(new(true, "La planilla no tiene ningún dato cargado."));
+        else
+            foreach (var tipo in Presentacion.Actividades)
+            {
+                if (!cargados.Contains(tipo))
+                { obs.Add(new(false, $"{NombreActividad(tipo)}: cargá los valores o marcalo como «sin actividad» (se completa con 0).", EsRequisito: true)); continue; }
+                var prefijo = cargados.Count > 1 ? NombreActividad(tipo) + ": " : "";
+                obs.AddRange(ValidarPlan(p.ParaTipo(tipo), anioFirme).Select(o => prefijo == "" ? o : o with { Mensaje = prefijo + o.Mensaje }));
+            }
+
+        foreach (var req in AnexosRequeridos.Todos.Where(a => a.Obligatorio))
+            if (!anexos.Any(a => a.Tipo == req.Codigo))
+                obs.Add(new(false, $"Falta adjuntar: {req.Titulo(anioFirme ?? p.AnioDesde)}.", EsRequisito: true));
+
+        foreach (var (titulo, valor) in TextosBloque4)
+            if (string.IsNullOrWhiteSpace(valor(p)))
+                obs.Add(new(false, $"Restricciones a la actividad: falta completar «{titulo}» (si no hay, escribí «Ninguno»).", EsRequisito: true));
+
+        return obs;
+    }
+
+    /// <summary>Controles de los valores de un plan (una sola actividad: <paramref name="p"/> viene de <see cref="Presentacion.ParaTipo"/>).</summary>
+    static List<Observacion> ValidarPlan(Presentacion p, int? anioFirme)
     {
         var obs = new List<Observacion>();
         var campos = CatalogoCampos.Para(p.TipoPlan);
         var calc = Calculadora.CalcularPlan(p.TipoPlan, p.Valores);
-        int? anioFirme = p.Ciclo?.Anio;
 
         foreach (var v in p.Valores.Where(v => v.Valor.HasValue))
         {
@@ -41,9 +73,6 @@ public static class Validador
             var motivo = ReglasDeDatos.Motivo(c, v.Valor!.Value);
             if (motivo is not null) obs.Add(new(true, v.Mes > 0 ? $"{Meses[Math.Clamp(v.Mes, 1, 12) - 1]}: {motivo}" : motivo, v.Anio));
         }
-
-        if (!p.Valores.Any(v => v.Valor.HasValue))
-            obs.Add(new(true, "La planilla no tiene ningún dato cargado."));
 
         // El primer año (el de la convocatoria) es compromiso firme y se carga por mes: debe estar completo en los campos principales.
         if (anioFirme is { } firme)
@@ -74,15 +103,6 @@ public static class Validador
                 previo = dr;
             }
         }
-
-        foreach (var req in AnexosRequeridos.Todos.Where(a => a.Obligatorio))
-            if (!anexos.Any(a => a.Tipo == req.Codigo))
-                obs.Add(new(false, $"Falta adjuntar: {req.Titulo(anioFirme ?? p.AnioDesde)}.", EsRequisito: true));
-
-        foreach (var (titulo, valor) in TextosBloque4)
-            if (string.IsNullOrWhiteSpace(valor(p)))
-                obs.Add(new(false, $"Restricciones a la actividad: falta completar «{titulo}» (si no hay, escribí «Ninguno»).", EsRequisito: true));
-
         return obs;
     }
 }

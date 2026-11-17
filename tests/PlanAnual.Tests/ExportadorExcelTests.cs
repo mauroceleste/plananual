@@ -17,8 +17,8 @@ public class ExportadorExcelTests
     static XLWorkbook Abrir(byte[] b) => new(new MemoryStream(b));
 
     [Theory]
-    [InlineData(TipoPlan.Cench, 34)]
-    [InlineData(TipoPlan.Convencional, 51)]
+    [InlineData(TipoPlan.Cench, 36)]
+    [InlineData(TipoPlan.Convencional, 53)]
     public void Tiene_las_mismas_columnas_que_la_planilla_oficial(TipoPlan tipo, int esperadas)
     {
         Assert.Equal(esperadas, ExportadorExcel.Columnas(tipo).Count);
@@ -75,7 +75,7 @@ public class ExportadorExcelTests
         decimal Sub(string cod) => ws.Cell(17, 3 + cols.IndexOf(cod)).GetValue<decimal>();
 
         Assert.Equal(3m, Sub("precio_gas"));            // promedio
-        Assert.Equal(3m, Sub("equipos_perforacion"));   // máximo del año
+        Assert.Equal(3m, Sub("equipos_perforacion"));   // máximo por periodo
         Assert.Equal(12m, Sub("desarrollo_recursos"));  // último mes con dato (acumulado)
         Assert.Equal(12m, Sub("prod_gas"));             // suma
     }

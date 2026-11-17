@@ -459,6 +459,7 @@ public sealed partial class PresentacionServiceTests : IDisposable
         var p = await svc.IniciarAsync(Ana, b, TipoPlan.Convencional);
         await CargarFirmeMensual(p.Id);
         await svc.GuardarCeldasAsync(p.Id, Ana, [new(2026, "inv_perforacion", 1, 1)]);
+        await svc.MarcarSinActividadAsync(p.Id, Ana, TipoPlan.Cench);   // un área declara sus dos planes: el que no tiene va en 0
         await AdjuntarRequeridos(p.Id);
         await svc.GuardarRestriccionesAsync(p.Id, Ana, "Ninguno", "Ninguno", "Ninguno", "Ninguno");
         return p;
@@ -486,6 +487,7 @@ public sealed partial class PresentacionServiceTests : IDisposable
         var a = await AreaCompleta(BloqueAlfa);
         var b = await svc.IniciarAsync(Ana, BloqueAlfa2, TipoPlan.Convencional);
         await CargarFirmeMensual(b.Id);   // datos sí; anexos y restricciones no
+        await svc.MarcarSinActividadAsync(b.Id, Ana, TipoPlan.Cench);
 
         var r = await svc.EnviarFinalAsync(Ana, [BloqueAlfa, BloqueAlfa2], id => "http://x/" + id);
 
@@ -515,7 +517,7 @@ public sealed partial class PresentacionServiceTests : IDisposable
         var r = await svc.EnviarFinalAsync(Ana, [BloqueAlfa], id => "http://x/" + id);
 
         Assert.Equal(0, r.Enviadas);
-        Assert.Contains("2026: Producción de gas", Assert.Single(r.Problemas));
+        Assert.Contains("Plan Convencional: Producción de gas", Assert.Single(r.Problemas));   // con los dos planes cargados, el mensaje dice a cuál se refiere
     }
 
     [Fact]

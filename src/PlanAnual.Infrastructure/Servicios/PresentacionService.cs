@@ -23,7 +23,8 @@ public sealed record UsuarioSesion(int Id, string Nombre, string Email, IReadOnl
 }
 
 /// <param name="Mes">0 para los años anuales; 1 a 12 en el primer año de la planilla (el de la convocatoria).</param>
-public sealed record CeldaDto(int Anio, string Campo, decimal? Valor, int Mes = 0);
+/// <param name="Tipo">Plan de actividad de la celda; si no se indica, el tipo principal de la presentación.</param>
+public sealed record CeldaDto(int Anio, string Campo, decimal? Valor, int Mes = 0, TipoPlan? Tipo = null);
 
 public sealed class OperacionInvalida(string mensaje) : Exception(mensaje);
 
@@ -33,6 +34,14 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         db.Ciclos.Where(c => c.Abierto).OrderByDescending(c => c.Anio).FirstOrDefaultAsync();
 
     /// <summary>Todas las convocatorias, la más nueva primero (para el selector de la Subsecretaría).</summary>
+    /// <summary>Qué planes de actividad tiene cargados cada presentación (consulta liviana: no trae los valores).</summary>
+    public async Task<Dictionary<long, List<TipoPlan>>> ActividadesAsync(IEnumerable<long> presentacionIds)
+    {
+        var ids = presentacionIds.ToList();
+        var filas = await db.PlanValores.AsNoTracking().Where(v => ids.Contains(v.PresentacionId) && v.Valor != null).Select(v => new { v.PresentacionId, v.Actividad }).Distinct().ToListAsync();
+        return filas.GroupBy(f => f.PresentacionId).ToDictionary(g => g.Key, g => g.Select(x => x.Actividad).OrderBy(x => x).ToList());
+    }
+
     public Task<List<Ciclo>> CiclosAsync() =>
         db.Ciclos.AsNoTracking().OrderByDescending(c => c.Anio).ToListAsync();
 
@@ -161,7 +170,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             CreadaEn = ahora, ModificadaEn = ahora,
             ConflictosSuperficiarios = origen.ConflictosSuperficiarios, EquiposContratosFirmes = origen.EquiposContratosFirmes,
             EquiposPlazos = origen.EquiposPlazos, EquiposCostos = origen.EquiposCostos, ExpedienteGde = origen.ExpedienteGde,
-            Valores = origen.Valores.Select(v => new PlanValor { Anio = v.Anio, Mes = v.Mes, Campo = v.Campo, Valor = v.Valor }).ToList(),
+            Valores = origen.Valores.Select(v => new PlanValor { Actividad = v.Actividad, Anio = v.Anio, Mes = v.Mes, Campo = v.Campo, Valor = v.Valor }).ToList(),
             Anexos = origen.Anexos.Select(a => new Anexo
             {
                 Tipo = a.Tipo, NombreArchivo = a.NombreArchivo, RutaAlmacenada = a.RutaAlmacenada,
@@ -182,7 +191,10 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
     {
         var p = await ObtenerAsync(id, u);
         await ExigirEditableAsync(p, u);
-        var campos = CatalogoCampos.Para(p.TipoPlan).ToDictionary(c => c.Codigo);
+        var tipo = celdas.FirstOrDefault()?.Tipo ?? p.TipoPlan;
+        if (celdas.Any(c => (c.Tipo ?? p.TipoPlan) != tipo)) throw new OperacionInvalida("Guardá de a un plan de actividad por vez.");
+        if (!Presentacion.Actividades.Contains(tipo)) throw new OperacionInvalida("Tipo de actividad desconocido.");
+        var campos = CatalogoCampos.Para(tipo).ToDictionary(c => c.Codigo);
 
         foreach (var c in celdas)
         {
@@ -193,9 +205,9 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             if (c.Valor is { } v && Math.Abs(v) > 1_000_000_000m) throw new OperacionInvalida("El valor es demasiado grande.");
             if (c.Valor is { } val && ReglasDeDatos.Motivo(def, val) is { } motivo) throw new OperacionInvalida(motivo);
 
-            var actual = p.Valores.FirstOrDefault(x => x.Anio == c.Anio && x.Mes == c.Mes && x.Campo == c.Campo);
+            var actual = p.Valores.FirstOrDefault(x => x.Actividad == tipo && x.Anio == c.Anio && x.Mes == c.Mes && x.Campo == c.Campo);
             if (actual is null && c.Valor is null) continue;
-            if (actual is null) p.Valores.Add(new PlanValor { PresentacionId = p.Id, Anio = c.Anio, Mes = c.Mes, Campo = c.Campo, Valor = c.Valor });
+            if (actual is null) p.Valores.Add(new PlanValor { PresentacionId = p.Id, Actividad = tipo, Anio = c.Anio, Mes = c.Mes, Campo = c.Campo, Valor = c.Valor });
             else if (c.Valor is null) { db.PlanValores.Remove(actual); p.Valores.Remove(actual); }
             else actual.Valor = c.Valor;
         }
@@ -204,8 +216,37 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         await db.SaveChangesAsync();
 
         var tocadas = celdas.Select(c => Calculadora.Clave(c.Anio, c.Mes)).Concat(celdas.Where(c => c.Mes > 0).Select(c => Calculadora.Clave(c.Anio, 0))).ToHashSet();
-        var calc = Calculadora.CalcularPeriodos(p.TipoPlan, p.Valores);
+        var calc = Calculadora.CalcularPeriodos(tipo, p.Valores.Where(v => v.Actividad == tipo));
         return tocadas.ToDictionary(k => k, k => calc.GetValueOrDefault(k) ?? []);
+    }
+
+    /// <summary>
+    /// Declara que el área no tiene actividad de ese tipo: carga 0 en todos los campos de carga, los doce meses del primer año y cada año
+    /// siguiente hasta el último de la planilla. Es lo mismo que elegir «No» en la planilla Excel.
+    /// </summary>
+    public async Task MarcarSinActividadAsync(long id, UsuarioSesion u, TipoPlan tipo)
+    {
+        var p = await ObtenerAsync(id, u);
+        await ExigirEditableAsync(p, u);
+        if (!Presentacion.Actividades.Contains(tipo)) throw new OperacionInvalida("Tipo de actividad desconocido.");
+        RellenarConCeros(p, tipo, p.Valores);
+        p.ModificadaEn = DateTime.Now;
+        RegistrarAsistencia(p, u);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Deja en 0 todos los campos de carga del plan (reemplaza lo que hubiera).</summary>
+    void RellenarConCeros(Presentacion p, TipoPlan tipo, ICollection<PlanValor> valores)
+    {
+        // Se actualiza en el lugar: borrar y volver a crear la misma clave en un mismo guardado la rechaza la base.
+        var existentes = valores.Where(v => v.Actividad == tipo).ToDictionary(v => (v.Anio, v.Mes, v.Campo));
+        var primer = p.Ciclo!.Anio;
+        foreach (var campo in CatalogoCampos.Para(tipo).Where(c => !c.EsCalculado))
+            for (var anio = primer; anio <= Math.Max(primer, p.AnioHasta); anio++)
+                foreach (var mes in anio == primer ? Enumerable.Range(1, 12) : [0])
+                    if (existentes.Remove((anio, mes, campo.Codigo), out var actual)) actual.Valor = 0m;
+                    else valores.Add(new PlanValor { PresentacionId = p.Id, Actividad = tipo, Anio = anio, Mes = mes, Campo = campo.Codigo, Valor = 0m });
+        foreach (var sobrante in existentes.Values) { db.PlanValores.Remove(sobrante); valores.Remove(sobrante); }
     }
 
     /// <summary>Guarda los cuatro textos del bloque 4 (restricciones a la actividad).</summary>
@@ -339,30 +380,29 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         return new(aEnviar.Count, []);
     }
 
-    // ---------- Planilla Excel de carga (todas las áreas) e importación ----------
+    // ---------- Planilla Excel de carga (todas las áreas, los dos tipos de actividad) e importación ----------
 
     public sealed record ResultadoImportacion(IReadOnlyList<ErrorImportacion> Errores, bool Truncado, IReadOnlyList<string> Areas);
 
-    /// <summary>Excel vacío con todas las áreas de la empresa (las que ya tienen tipo de actividad definido).</summary>
-    public async Task<byte[]> PlantillaAsync(UsuarioSesion u, IReadOnlyList<BloqueInfo> bloques, IReadOnlyDictionary<int, TipoPlan> tipos)
+    /// <summary>Excel vacío con todas las áreas de la empresa: cada una con un bloque Convencional y uno No Convencional.</summary>
+    public async Task<byte[]> PlantillaAsync(UsuarioSesion u, IReadOnlyList<BloqueInfo> bloques)
     {
         if (bloques.Count == 0) throw new OperacionInvalida("No hay áreas para armar la planilla.");
         if (bloques.Any(b => !u.PuedeEditar(b.Cuit))) throw new UnauthorizedAccessException();
         var ciclo = await CicloAbiertoAsync() ?? throw new OperacionInvalida("No hay una convocatoria abierta.");
-        var areas = bloques.Where(b => tipos.ContainsKey(b.IdBloque)).Select(b => new AreaPlantilla(b.IdBloque, b.Nombre, tipos[b.IdBloque])).ToList();
-        if (areas.Count == 0) throw new OperacionInvalida("La Subsecretaría todavía no definió el tipo de actividad de tus áreas: no se puede armar la planilla.");
-        return PlanillaExcel.Generar(ciclo, bloques[0].RazonSocial, areas, bloques.Where(b => !tipos.ContainsKey(b.IdBloque)).Select(b => b.Nombre).OrderBy(n => n).ToList());
+        var areas = bloques.OrderBy(b => b.Nombre).Select(b => new AreaPlantilla(b.IdBloque, b.Nombre)).ToList();
+        return PlanillaExcel.Generar(ciclo, bloques[0].RazonSocial, areas);
     }
 
     /// <summary>
     /// Lee el Excel y, si no tiene ningún error, carga los valores como borrador de cada área incluida (reemplazando lo que hubiera).
-    /// Es todo o nada: con un solo error no se toca nada y se devuelve la lista completa.
+    /// Un bloque con «¿Tiene actividad? No» queda en 0. Es todo o nada: con un solo error no se toca nada y se devuelve la lista completa.
     /// </summary>
-    public async Task<ResultadoImportacion> ImportarAsync(UsuarioSesion u, IReadOnlyList<BloqueInfo> bloques, IReadOnlyDictionary<int, TipoPlan> tipos, Stream archivo)
+    public async Task<ResultadoImportacion> ImportarAsync(UsuarioSesion u, IReadOnlyList<BloqueInfo> bloques, Stream archivo)
     {
         if (bloques.Any(b => !u.PuedeEditar(b.Cuit))) throw new UnauthorizedAccessException();
         var ciclo = await CicloAbiertoAsync() ?? throw new OperacionInvalida("No hay una convocatoria abierta.");
-        var permitidas = bloques.Where(b => tipos.ContainsKey(b.IdBloque)).ToDictionary(b => b.IdBloque, b => new AreaPlantilla(b.IdBloque, b.Nombre, tipos[b.IdBloque]));
+        var permitidas = bloques.ToDictionary(b => b.IdBloque, b => new AreaPlantilla(b.IdBloque, b.Nombre));
 
         var lectura = PlanillaExcel.Leer(archivo, permitidas, ciclo.Anio);
         var errores = lectura.Errores.ToList();
@@ -376,23 +416,32 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
                 .Where(x => x.CicloId == ciclo.Id && x.Cuit == b.Cuit && x.IdBloque == b.IdBloque).OrderByDescending(x => x.Version).FirstOrDefaultAsync();
             if (p is { Estado: not EstadoPresentacion.Borrador })
             { errores.Add(new("(archivo)", null, null, $"{area.Nombre}: ya fue enviada. Para modificarla pedí una rectificación y, cuando te la habiliten, importá de nuevo.")); continue; }
-            if (p is null) { await IniciarAsync(u, b, area.Tipo); p = await db.Presentaciones.Include(x => x.Ciclo).Include(x => x.Valores).FirstAsync(x => x.CicloId == ciclo.Id && x.Cuit == b.Cuit && x.IdBloque == b.IdBloque); }
+            if (p is null)
+            {
+                // El tipo principal (el de las cuentas de siempre) es el primero que tiene actividad.
+                var principal = area.Planes.FirstOrDefault(x => !x.SinActividad)?.Tipo ?? TipoPlan.Convencional;
+                await IniciarAsync(u, b, principal);
+                p = await db.Presentaciones.Include(x => x.Ciclo).Include(x => x.Valores).FirstAsync(x => x.CicloId == ciclo.Id && x.Cuit == b.Cuit && x.IdBloque == b.IdBloque);
+            }
             else
             {
                 try { await ExigirEditableAsync(p, u); }
                 catch (OperacionInvalida ex) { errores.Add(new("(archivo)", null, null, $"{area.Nombre}: {ex.Message}")); continue; }
             }
 
-            // Se actualiza en el lugar (no se borra y se vuelve a crear la misma clave).
-            var nuevos = area.Valores.ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor);
-            foreach (var viejo in p.Valores.ToList())
-            {
-                if (nuevos.Remove((viejo.Anio, viejo.Mes, viejo.Campo), out var valor)) viejo.Valor = valor;
-                else { db.PlanValores.Remove(viejo); p.Valores.Remove(viejo); }
-            }
-            foreach (var ((anio, mes, campo), valor) in nuevos) p.Valores.Add(new PlanValor { PresentacionId = p.Id, Anio = anio, Mes = mes, Campo = campo, Valor = valor });
-            p.TipoPlan = area.Tipo;
             p.AnioDesde = ciclo.Anio; p.AnioHasta = Math.Max(ciclo.Anio, area.AnioHasta);
+            foreach (var plan in area.Planes)
+            {
+                if (plan.SinActividad) { RellenarConCeros(p, plan.Tipo, p.Valores); continue; }
+                // Se actualiza en el lugar (no se borra y se vuelve a crear la misma clave).
+                var nuevos = plan.Valores.ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor);
+                foreach (var viejo in p.Valores.Where(v => v.Actividad == plan.Tipo).ToList())
+                {
+                    if (nuevos.Remove((viejo.Anio, viejo.Mes, viejo.Campo), out var valor)) viejo.Valor = valor;
+                    else { db.PlanValores.Remove(viejo); p.Valores.Remove(viejo); }
+                }
+                foreach (var ((anio, mes, campo), valor) in nuevos) p.Valores.Add(new PlanValor { PresentacionId = p.Id, Actividad = plan.Tipo, Anio = anio, Mes = mes, Campo = campo, Valor = valor });
+            }
             p.ModificadaEn = DateTime.Now;
             RegistrarAsistencia(p, u);
         }
@@ -525,8 +574,8 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
     public static string Huella(Presentacion p)
     {
         var sb = new StringBuilder();
-        foreach (var v in p.Valores.Where(v => v.Valor.HasValue).OrderBy(v => v.Anio).ThenBy(v => v.Mes).ThenBy(v => v.Campo, StringComparer.Ordinal))
-            sb.Append(v.Anio).Append(v.Mes > 0 ? "-" + v.Mes : "").Append('|').Append(v.Campo).Append('|').Append(v.Valor!.Value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+        foreach (var v in p.Valores.Where(v => v.Valor.HasValue).OrderBy(v => v.Actividad == p.TipoPlan ? 0 : 1).ThenBy(v => v.Actividad).ThenBy(v => v.Anio).ThenBy(v => v.Mes).ThenBy(v => v.Campo, StringComparer.Ordinal))
+            sb.Append(v.Actividad == p.TipoPlan ? "" : (int)v.Actividad + ":").Append(v.Anio).Append(v.Mes > 0 ? "-" + v.Mes : "").Append('|').Append(v.Campo).Append('|').Append(v.Valor!.Value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
         foreach (var a in p.Anexos.OrderBy(a => a.Sha256, StringComparer.Ordinal)) sb.Append("A|").Append(a.Tipo).Append('|').Append(a.Sha256).Append('\n');
         foreach (var (titulo, valor) in Validador.TextosBloque4)
             if (!string.IsNullOrWhiteSpace(valor(p))) sb.Append("T|").Append(titulo).Append('|').Append(valor(p)!.Trim()).Append('\n');
@@ -535,15 +584,15 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
 
     async Task EnviarMailAsync(Presentacion p, UsuarioSesion u, string url)
     {
-        var calc = Calculadora.CalcularPlan(p.TipoPlan, p.Valores);
+        var tiposCargados = p.TiposCargados().DefaultIfEmpty(p.TipoPlan).ToList();   // un área puede tener plan Convencional y No Convencional
         string Fila(string et, string v) => $"<tr><td style=\"padding:4px 12px 4px 0;color:#5F7185\">{et}</td><td><strong>{WebUtility.HtmlEncode(v)}</strong></td></tr>";
         var anioFirme = p.Ciclo!.Anio;
-        var inv = calc.GetValueOrDefault(anioFirme)?.GetValueOrDefault("inv_total") ?? 0;
+        var inv = tiposCargados.Sum(t => Calculadora.CalcularPlan(t, p.Valores.Where(v => v.Actividad == t)).GetValueOrDefault(anioFirme)?.GetValueOrDefault("inv_total") ?? 0);
         var html = $"""
             <div style="font-family:Segoe UI,Arial,sans-serif;color:#111C26;max-width:560px">
             <h2 style="color:#00374C;margin:0 0 8px">Plan de Inversiones {anioFirme}: presentación recibida</h2>
             <p>Se registró la presentación de <strong>{WebUtility.HtmlEncode(p.RazonSocial)}</strong> para <strong>{WebUtility.HtmlEncode(p.NombreArea)}{(p.NombreArea == p.NombreBloque ? "" : " - " + WebUtility.HtmlEncode(p.NombreBloque))}</strong>.</p>
-            <table>{Fila("Comprobante", p.NumeroComprobante!)}{Fila("Tipo de plan", p.TipoPlan == TipoPlan.Cench ? "CENCH (no convencional)" : "Convencional")}
+            <table>{Fila("Comprobante", p.NumeroComprobante!)}{Fila("Tipo de actividad", string.Join(" y ", tiposCargados.Select(t => t == TipoPlan.Cench ? "No Convencional (CENCH)" : "Convencional")))}
             {Fila("Versión", p.Version.ToString())}{Fila("Enviada", p.EnviadaEn!.Value.ToString("dd/MM/yyyy HH:mm"))}{Fila("Enviada por", p.EnviadaPor ?? p.UsuarioNombre)}
             {Fila($"Inversión {anioFirme}", inv.ToString("N2", new System.Globalization.CultureInfo("es-AR")) + " MMUSD")}{Fila("Años cubiertos", $"{p.AnioDesde} a {p.AnioHasta}")}
             {Fila("Anexos adjuntos", p.Anexos.Count.ToString())}{Fila("Huella (SHA-256)", p.HuellaEnvio![..16] + "…")}</table>

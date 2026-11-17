@@ -3,13 +3,11 @@
 <div class="container-xl is-wide py-4">
     <div class="page-head">
         <div><span class="page-head__eyebrow">Administración</span><h1>Tipo de actividad por área</h1>
-            <p>Qué planilla carga cada área (Convencional o CENCH). Rige lo que fijes acá; si dejás "Usar el de Legajos", rige lo que informe el servicio de Legajos de Áreas cuando publique este dato.</p></div>
+            <p>Dato informativo: desde que la planilla es una sola, las empresas cargan Convencional y/o No Convencional en cada área y declaran el que no tienen (en 0). Esta pantalla ya no condiciona la carga ni el tablero.</p></div>
     </div>
     @{ var sinTipo = Model.Count(f => f.Vigente is null);
        var desdeLegajos = Model.Count(f => f.SegunLegajos is not null);
        string Nom(TipoPlan? t) => t switch { TipoPlan.Cench => "CENCH", TipoPlan.Convencional => "Convencional", _ => "—" }; }
-    @if (sinTipo > 0) { <div class="alert alert-warning">@Url.Icono("alert")<div>Hay <strong>@sinTipo</strong> áreas sin tipo definido: sus empresas no pueden comenzar la carga.</div></div> }
-    @if (desdeLegajos == 0) { <div class="alert alert-info">@Url.Icono("info")<div>El servicio de Legajos de Áreas todavía no informa el tipo de actividad. Hasta que lo haga, se define acá a mano.</div></div> }
     <div class="table-card"><div class="table-responsive">
         <table class="table data-table is-cards datos" data-archivo="tipo_actividad_areas">
             <thead><tr><th>Operadora</th><th>Área</th><th>Código</th><th>Según Legajos</th><th>Rige</th><th>Fijar a mano</th></tr></thead>

@@ -84,7 +84,7 @@ public class TiposDeDatosTests
     public void El_motivo_nombra_el_campo_y_explica_en_castellano()
     {
         Assert.Equal("Pozos productores perforados: debe ser un número entero (sin decimales).", ReglasDeDatos.Motivo(C("pozos_perforados"), 2.5m));
-        Assert.Equal("Equipos de perforación (máximo del año): admite hasta 2 decimales.", ReglasDeDatos.Motivo(C("equipos_perforacion"), 1.145m));
+        Assert.Equal("Equipos de perforación (máximo por periodo): admite hasta 2 decimales.", ReglasDeDatos.Motivo(C("equipos_perforacion"), 1.145m));
         Assert.Equal("Gas: admite hasta 2 decimales.", ReglasDeDatos.Motivo(C("precio_gas"), 3.455m));
         Assert.Contains("no puede superar 100", ReglasDeDatos.Motivo(C("desarrollo_recursos"), 101m));
     }

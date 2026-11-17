@@ -35,7 +35,7 @@
     {
         <div class="table-card"><div class="table-responsive">
         <table class="table data-table is-cards">
-            <thead><tr><th>Área</th><th>Operadora</th><th>Tipo de plan</th><th>Estado</th><th>Última modificación</th>@if (asiste) {<th>Adjuntos</th><th>Obs.</th><th>Expediente GDE</th>}<th></th></tr></thead>
+            <thead><tr><th>Área</th><th>Operadora</th><th>Actividad</th><th>Estado</th><th>Última modificación</th>@if (asiste) {<th>Adjuntos</th><th>Obs.</th><th>Expediente GDE</th>}<th></th></tr></thead>
             <tbody>
             @foreach (var f in Model.Filas)
             {
@@ -43,7 +43,7 @@
                 <tr>
                     <td data-label="Área"><span class="t-title">@f.Bloque.Nombre</span></td>
                     <td data-label="Operadora">@f.Bloque.RazonSocial</td>
-                    <td data-label="Tipo de plan">@if (f.Tipo is null) { <span class="chip chip--tag">A definir por la Subsecretaría</span> } else { <span class="chip chip--tag">@(f.Tipo == TipoPlan.Cench ? "CENCH" : "Convencional")</span> }</td>
+                    <td data-label="Actividad">@if (p is null) { <span class="text-muted">—</span> } else { foreach (var t in Model.Actividades.GetValueOrDefault(p.Id) ?? [p.TipoPlan]) { <span class="chip chip--tag">@(t == TipoPlan.Cench ? "No Convencional" : "Convencional")</span> } }</td>
                     <td data-label="Estado">
                         @if (p is null) { <span class="chip">Sin iniciar</span> }
                         else if (p.Estado == EstadoPresentacion.Borrador)
@@ -95,7 +95,7 @@
                         @if (p is null)
                         {
                             <form asp-action="Iniciar" method="post" data-una-vez class="d-inline"><input type="hidden" name="idBloque" value="@f.Bloque.IdBloque" /><input type="hidden" name="cuit" value="@Model.CuitAsistido" />
-                                <button class="btn btn-accent btn-sm" disabled="@(f.Tipo is null || c is null)">@Url.Icono("plus") Comenzar</button></form>
+                                <button class="btn btn-accent btn-sm" disabled="@(c is null)">@Url.Icono("plus") Comenzar</button></form>
                         }
                         else if (p.Estado == EstadoPresentacion.Borrador) { <a class="btn btn-primary btn-sm" asp-action="Editar" asp-route-id="@p.Id">@Url.Icono("edit") Continuar</a> }
                         else
@@ -131,10 +131,10 @@
             </tbody>
         </table></div></div>
 
-        var hayEditables = c is not null && Model.Filas.Any(f => f.Tipo is not null && (f.Ultima is null || f.Ultima.Estado == EstadoPresentacion.Borrador));
+        var hayEditables = c is not null && Model.Filas.Any(f => f.Ultima is null || f.Ultima.Estado == EstadoPresentacion.Borrador);
         <div class="panel section-gap">
             <div class="panel__head"><h2 class="panel__title">@Url.Icono("download") Cargar con Excel</h2></div>
-            <p class="form-text">Descargá una única planilla con <strong>todas tus áreas</strong> (con la columna del área y las instrucciones), completala y subila. El primer año (@(c?.Anio)) se informa mes por mes y los siguientes por año. Las celdas no pueden quedar vacías: si no hay valor, va 0. Si hay errores te decimos en qué hoja, fila y columna, y no se importa nada hasta corregirlos. También podés cargar a mano, área por área, con el botón <em>Comenzar</em> / <em>Continuar</em>.</p>
+            <p class="form-text">Descargá una única planilla con <strong>todas tus áreas</strong>, cada una con su bloque <strong>Convencional</strong> y su bloque <strong>No Convencional</strong>. En la primera fila de cada bloque elegí <em>¿Tiene actividad? Sí / No</em>: con «No» el sistema carga ceros y no tenés que completar nada más de ese bloque. El primer año (@(c?.Anio)) se informa mes por mes y los siguientes por año. En los bloques con «Sí» las celdas no pueden quedar vacías: si no hay valor, va 0. Si hay errores te decimos en qué fila y columna, y no se importa nada hasta corregirlos. También podés cargar a mano, área por área, con el botón <em>Comenzar</em> / <em>Continuar</em> (en el formulario elegís el plan Convencional o No Convencional).</p>
             <div class="d-flex flex-wrap gap-3 align-items-end">
                 <a class="btn btn-outline-secondary" asp-action="PlanillaExcel" asp-route-cuit="@Model.CuitAsistido">@Url.Icono("download") Descargar planilla Excel</a>
                 @if (hayEditables)

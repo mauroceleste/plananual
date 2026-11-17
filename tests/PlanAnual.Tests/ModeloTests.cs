@@ -21,11 +21,11 @@ public class CatalogoTests
     [Fact]
     public void Columnas_coinciden_con_las_planillas_oficiales()
     {
-        // Planilla CENCH: 35 columnas de datos (C..AJ) con Total de inversión y Desarrollo.
+        // Planilla CENCH: 35 columnas (más Canon y Renta Extraordinarios) de datos (C..AJ) con Total de inversión y Desarrollo.
         // Se cuentan los campos cargables + calculados del modelo oficial, sin los totales propios de gastos.
-        Assert.Equal(34, CatalogoCampos.Para(TipoPlan.Cench).Count(c => c.Codigo != "gto_total"));
-        // Planilla Convencionales: 51 columnas (C..BA) sin el total de gastos que el modelo no trae.
-        Assert.Equal(51, CatalogoCampos.Para(TipoPlan.Convencional).Count(c => c.Codigo != "gto_total"));
+        Assert.Equal(36, CatalogoCampos.Para(TipoPlan.Cench).Count(c => c.Codigo != "gto_total"));
+        // Planilla Convencionales: 51 columnas (más Canon y Renta Extraordinarios) (C..BA) sin el total de gastos que el modelo no trae.
+        Assert.Equal(53, CatalogoCampos.Para(TipoPlan.Convencional).Count(c => c.Codigo != "gto_total"));
     }
 
     [Fact]

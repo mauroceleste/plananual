@@ -131,10 +131,10 @@ public static class Indicadores
         Ciclo ciclo, int anioFirme, int cantidadAnios)
     {
         var anios = Enumerable.Range(anioFirme, cantidadAnios).ToList();
-        var calc = todasLasVersiones.Concat(enviadas).DistinctBy(p => p.Id)
-            .ToDictionary(p => p.Id, p => Calculadora.CalcularPlan(p.TipoPlan, p.Valores));
+        var calc = todasLasVersiones.Concat(enviadas).DistinctBy(p => (p.Id, p.TipoPlan))
+            .ToDictionary(p => (p.Id, p.TipoPlan), p => Calculadora.CalcularPlan(p.TipoPlan, p.Valores));
 
-        decimal V(Presentacion p, int a, string c) => calc[p.Id].TryGetValue(a, out var f) && f.TryGetValue(c, out var v) ? v : 0m;
+        decimal V(Presentacion p, int a, string c) => calc[(p.Id, p.TipoPlan)].TryGetValue(a, out var f) && f.TryGetValue(c, out var v) ? v : 0m;
         decimal S(int a, string c) => enviadas.Sum(p => V(p, a, c));
 
         // ---------- serie por año ----------
@@ -282,11 +282,14 @@ public static class Indicadores
         var cambios = new List<CambioVersion>();
         foreach (var g in todasLasVersiones.GroupBy(p => (p.CicloId, p.Cuit, p.IdBloque)))
         {
-            var v = g.OrderByDescending(p => p.Version).Take(2).ToList();
-            if (v.Count < 2) continue;
-            decimal Inv(Presentacion p) => anios.Sum(a => V(p, a, "inv_total"));
-            var antes = Inv(v[1]); var despues = Inv(v[0]);
-            var petA = V(v[1], anioFirme, "prod_petroleo"); var petD = V(v[0], anioFirme, "prod_petroleo");
+            // Cada versión puede traer un plan Convencional y uno No Convencional: se comparan sumados.
+            var porVersion = g.GroupBy(p => p.Version).OrderByDescending(x => x.Key).Take(2).Select(x => x.ToList()).ToList();
+            if (porVersion.Count < 2) continue;
+            decimal Inv(List<Presentacion> ps) => ps.Sum(p => anios.Sum(a => V(p, a, "inv_total")));
+            decimal Pet(List<Presentacion> ps) => ps.Sum(p => V(p, anioFirme, "prod_petroleo"));
+            var v = new[] { porVersion[0][0], porVersion[1][0] };
+            var antes = Inv(porVersion[1]); var despues = Inv(porVersion[0]);
+            var petA = Pet(porVersion[1]); var petD = Pet(porVersion[0]);
             cambios.Add(new CambioVersion(v[0].Id, v[0].RazonSocial, Area(v[0]), v[0].Version, antes, despues,
                 antes > 0 ? (despues - antes) / antes * 100 : null, petA > 0 ? (petD - petA) / petA * 100 : null));
         }

@@ -57,7 +57,7 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
 
         b.Entity<PlanValor>(e =>
         {
-            e.HasKey(x => new { x.PresentacionId, x.Anio, x.Mes, x.Campo });
+            e.HasKey(x => new { x.PresentacionId, x.Actividad, x.Anio, x.Mes, x.Campo });
             e.Property(x => x.Campo).HasMaxLength(40);
             e.Property(x => x.Valor).HasPrecision(18, 6);
             e.HasIndex(x => x.Campo);

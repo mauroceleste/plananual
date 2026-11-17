@@ -78,6 +78,27 @@ public class Presentacion
 
     public List<PlanValor> Valores { get; set; } = new();
     public List<Anexo> Anexos { get; set; } = new();
+
+    /// <summary>Los dos planes de actividad que puede tener un área, en el orden en que se muestran.</summary>
+    public static readonly TipoPlan[] Actividades = [TipoPlan.Convencional, TipoPlan.Cench];
+
+    /// <summary>Tipos de actividad que tienen al menos un valor cargado (un plan en 0 también cuenta: es una declaración).</summary>
+    public IReadOnlyList<TipoPlan> TiposCargados() => Actividades.Where(t => Valores.Any(v => ActividadDe(v) == t && v.Valor.HasValue)).ToList();
+
+    /// <summary>Plan de un valor; los que no lo traen (0) se toman del tipo principal de la presentación.</summary>
+    public TipoPlan ActividadDe(PlanValor v) => v.Actividad == 0 ? TipoPlan : v.Actividad;
+
+    /// <summary>
+    /// Copia de solo lectura con únicamente los valores de un tipo de actividad y ese tipo como TipoPlan. Sirve para calcular, validar y
+    /// mostrar cada plan por separado con la misma lógica de siempre. Nunca se guarda.
+    /// </summary>
+    public Presentacion ParaTipo(TipoPlan tipo)
+    {
+        var copia = (Presentacion)MemberwiseClone();
+        copia.TipoPlan = tipo;
+        copia.Valores = Valores.Where(v => ActividadDe(v) == tipo).ToList();
+        return copia;
+    }
 }
 
 /// <summary>
@@ -87,6 +108,8 @@ public class Presentacion
 public class PlanValor
 {
     public long PresentacionId { get; set; }
+    /// <summary>Plan de actividad al que pertenece el valor: un área puede tener Convencional y No Convencional (CENCH) a la vez.</summary>
+    public TipoPlan Actividad { get; set; }
     public int Anio { get; set; }
     /// <summary>0 = valor anual; 1 a 12 = mes (solo en el primer año de la planilla).</summary>
     public int Mes { get; set; }

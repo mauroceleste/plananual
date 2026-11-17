@@ -15,7 +15,7 @@
             <span class="page-head__eyebrow">@p.Ciclo.Nombre · @p.RazonSocial</span>
             <h1>@nombreArea</h1>
             <p>
-                <span class="chip chip--tag">@(p.TipoPlan == TipoPlan.Cench ? "Plan de Desarrollo CENCH (no convencional)" : "Plan de Desarrollo Convencionales")</span>
+                <span class="chip chip--tag">@Validador.NombreActividad(Model.TipoActual)</span>
                 @if (p.Estado == EstadoPresentacion.Borrador) { <span class="chip chip--warn">Borrador @(p.Version > 1 ? $"· rectificatoria v{p.Version}" : "")</span> }
                 else { <span class="chip chip--ok">Enviada v@(p.Version)</span> }
             </p>
@@ -30,12 +30,34 @@
     @if (p.AsistidaPor is not null) { <div class="alert alert-secondary">@Url.Icono("user")<div>Esta planilla se cargó con asistencia de Administración (@p.AsistidaPor).</div></div> }
     @if (ro) { <div class="alert alert-info">@Url.Icono("lock")<div>Esta versión ya fue enviada y no se puede modificar. <a asp-action="Comprobante" asp-route-id="@p.Id">Ver el comprobante</a>.</div></div> }
 
+    @* Un área puede tener plan Convencional y No Convencional: se carga de a uno; el que no tenga se declara «sin actividad» (0). *@
+    <ul class="nav nav-pills mb-3" aria-label="Plan de actividad">
+        @foreach (var t in Presentacion.Actividades)
+        {
+            var cargado = Model.Cargados.Contains(t);
+            <li class="nav-item">
+                <a class="nav-link @(t == Model.TipoActual ? "active" : "")" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Tipo == TipoPaso.Grilla ? paso.Indice : 0)" asp-route-plan="@((int)t)" data-flush aria-current="@(t == Model.TipoActual ? "page" : null)">
+                    @Validador.NombreActividad(t)
+                    <span class="badge rounded-pill @(cargado ? "text-bg-success" : "text-bg-secondary") ms-1">@(cargado ? "cargado" : "sin datos")</span>
+                </a>
+            </li>
+        }
+    </ul>
+    @if (paso.Tipo == TipoPaso.Grilla && !ro)
+    {
+        <form asp-action="SinActividad" asp-route-id="@p.Id" method="post" data-una-vez
+              data-confirmar="Se carga 0 en todo el @Validador.NombreActividad(Model.TipoActual) (reemplaza lo que hubiera). ¿Continuar?" class="mb-3">
+            <input type="hidden" name="plan" value="@((int)Model.TipoActual)" /><input type="hidden" name="paso" value="@paso.Indice" />
+            <button class="btn btn-outline-secondary btn-sm">Esta área no tiene actividad: @(Model.TipoActual == TipoPlan.Cench ? "No Convencional" : "Convencional") (cargar todo en 0)</button>
+        </form>
+    }
+
     <nav class="stepper" aria-label="Pasos del formulario">
         <ol>
             @foreach (var s in Model.Pasos)
             {
                 <li class="@(s.Indice == paso.Indice ? "is-current" : "")">
-                    <a asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@s.Indice" data-flush aria-current="@(s.Indice == paso.Indice ? "step" : null)">
+                    <a asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@s.Indice" asp-route-plan="@((int)Model.TipoActual)" data-flush aria-current="@(s.Indice == paso.Indice ? "step" : null)">
                         <span class="stepper__n">@(s.Indice + 1)</span><span class="stepper__t">@s.Titulo</span></a>
                 </li>
             }
@@ -83,7 +105,7 @@
             </details>
 
             <div class="grilla-wrap" tabindex="0" aria-label="Planilla de @paso.Titulo">
-                <table class="grilla" data-guardar="@Url.Action("Guardar", "Plan", new { id = p.Id })" data-ro="@(ro ? "1" : "0")">
+                <table class="grilla" data-guardar="@Url.Action("Guardar", "Plan", new { id = p.Id, plan = (int)Model.TipoActual })" data-ro="@(ro ? "1" : "0")">
                     <thead>
                         <tr>
                             <th class="grilla__anio" scope="col">Año</th>
@@ -256,8 +278,8 @@
     }
 
     <div class="action-bar">
-        @if (paso.Indice > 0) { <a class="btn btn-outline-secondary" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Indice - 1)" data-flush>@Url.Icono("left") Anterior</a> } else { <span></span> }
-        @if (paso.Indice < Model.Pasos.Count - 1) { <a class="btn btn-primary" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Indice + 1)" data-flush>Siguiente @Url.Icono("right")</a> }
+        @if (paso.Indice > 0) { <a class="btn btn-outline-secondary" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Indice - 1)" asp-route-plan="@((int)Model.TipoActual)" data-flush>@Url.Icono("left") Anterior</a> } else { <span></span> }
+        @if (paso.Indice < Model.Pasos.Count - 1) { <a class="btn btn-primary" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Indice + 1)" asp-route-plan="@((int)Model.TipoActual)" data-flush>Siguiente @Url.Icono("right")</a> }
     </div>
 </div>
 

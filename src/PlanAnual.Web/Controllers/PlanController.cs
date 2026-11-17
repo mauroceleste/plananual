@@ -36,10 +36,10 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         try
         {
             var bloques = (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).OrderBy(b => b.Nombre).ToList();
-            var tipos = await tiposProvider.TodosAsync();
             var ultimas = vm.Ciclo is null ? [] : await svc.UltimasPorBloqueAsync(vm.Ciclo.Id, cuits, conAnexos: u.Rol == Rol.Administrador);
             var solicitudes = vm.Ciclo is null ? [] : await svc.UltimasSolicitudesAsync(vm.Ciclo.Id, cuits);
-            vm.Filas = bloques.Select(b => new FilaArea(b, tipos.TryGetValue(b.IdBloque, out var t) ? t : (TipoPlan?)null, ultimas.GetValueOrDefault(b.IdBloque), solicitudes.GetValueOrDefault(b.IdBloque))).ToList();
+            vm.Filas = bloques.Select(b => new FilaArea(b, null, ultimas.GetValueOrDefault(b.IdBloque), solicitudes.GetValueOrDefault(b.IdBloque))).ToList();
+            vm.Actividades = await svc.ActividadesAsync(vm.Filas.Where(f => f.Ultima is not null).Select(f => f.Ultima!.Id));
             vm.Pendientes = await svc.PendientesAsync(vm.Filas.Where(f => f.Ultima?.Estado == EstadoPresentacion.Borrador).Select(f => f.Ultima!.Id));
             vm.RazonAsistida = bloques.FirstOrDefault()?.RazonSocial;
             if (vm.Ciclo is not null && u.Rol == Rol.Administrador && cuit is not null) vm.Observaciones = await svc.ConteoObservacionesAsync(u, vm.Ciclo.Id, cuit);
@@ -58,9 +58,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         IReadOnlyList<string> cuits = u.Rol == Rol.Administrador ? (string.IsNullOrEmpty(cuit) || !cuit.All(char.IsDigit) ? [] : [cuit]) : u.Cuits;
         var bloque = (await Task.WhenAll(cuits.Select(c => legajos.BloquesPorOperadorAsync(c)))).SelectMany(x => x).FirstOrDefault(b => b.IdBloque == idBloque);
         if (bloque is null) return Forbid();
-        var tipo = await tiposProvider.DeAsync(idBloque);
-        if (tipo is null) { TempData["Error"] = "La Subsecretaría todavía no definió el tipo de actividad de esta área."; return RedirectToAction(nameof(Index), new { cuit }); }
-        try { var p = await svc.IniciarAsync(u, bloque, tipo.Value); return RedirectToAction(nameof(Editar), new { id = p.Id }); }
+        try { var p = await svc.IniciarAsync(u, bloque, TipoPlan.Convencional); return RedirectToAction(nameof(Editar), new { id = p.Id }); }
         catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; return RedirectToAction(nameof(Index), new { cuit }); }
         catch (UnauthorizedAccessException) { return Forbid(); }
     }
@@ -171,17 +169,19 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
 
     // ---------- Formulario por pasos ----------
     [HttpGet("Plan/Editar/{id:long}")]
-    public async Task<IActionResult> Editar(long id, int paso = 0)
+    public async Task<IActionResult> Editar(long id, int paso = 0, int? plan = null)
     {
         var u = User.ToSesion();
         Presentacion p;
         try { p = await svc.ObtenerAsync(id, u); } catch (OperacionInvalida) { return NotFound(); } catch (UnauthorizedAccessException) { return Forbid(); }
 
+        // Un área puede tener plan Convencional y No Convencional: se trabaja de a uno (?plan=1 o 2); por defecto, el principal.
+        var tipoActual = plan is { } pl && Enum.IsDefined(typeof(TipoPlan), pl) ? (TipoPlan)pl : p.TipoPlan;
         var vm = new EditarVm
         {
-            P = p, Pasos = PasosDe(p.TipoPlan), SoloLectura = p.Estado != EstadoPresentacion.Borrador || !u.PuedeEditar(p.Cuit),
-            Calc = Calculadora.CalcularPeriodos(p.TipoPlan, p.Valores),
-            Ingresados = p.Valores.Where(v => v.Valor.HasValue).ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor!.Value),
+            P = p, TipoActual = tipoActual, Cargados = p.TiposCargados(), Pasos = PasosDe(tipoActual), SoloLectura = p.Estado != EstadoPresentacion.Borrador || !u.PuedeEditar(p.Cuit),
+            Calc = Calculadora.CalcularPeriodos(tipoActual, p.Valores.Where(v => p.ActividadDe(v) == tipoActual)),
+            Ingresados = p.Valores.Where(v => v.Valor.HasValue && p.ActividadDe(v) == tipoActual).ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor!.Value),
         };
         vm.PasoActual = Math.Clamp(paso, 0, vm.Pasos.Count - 1);
         if (vm.Actual.Tipo == TipoPaso.Revision) vm.Observaciones = await svc.RevisarAsync(id, u);
@@ -201,11 +201,11 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
     public record GuardarReq(List<CeldaDto> Celdas);
 
     [HttpPost("Plan/Guardar/{id:long}")]
-    public async Task<IActionResult> Guardar(long id, [FromBody] GuardarReq req)
+    public async Task<IActionResult> Guardar(long id, [FromBody] GuardarReq req, int? plan = null)
     {
         try
         {
-            var filas = await svc.GuardarCeldasAsync(id, User.ToSesion(), req.Celdas);
+            var filas = await svc.GuardarCeldasAsync(id, User.ToSesion(), plan is { } pl ? req.Celdas.Select(c => c with { Tipo = (TipoPlan)pl }).ToList() : req.Celdas);
             return Json(new { ok = true, filas, hora = DateTime.Now.ToString("HH:mm:ss") });
         }
         catch (OperacionInvalida ex) { return BadRequest(new { ok = false, error = ex.Message }); }
@@ -229,6 +229,21 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
         return RedirectToAction(nameof(Editar), new { id, paso });
+    }
+
+    /// <summary>Declara que el área no tiene actividad de ese tipo: carga 0 en todo ese plan.</summary>
+    [HttpPost("Plan/SinActividad/{id:long}")]
+    public async Task<IActionResult> SinActividad(long id, int plan, int paso)
+    {
+        try
+        {
+            if (!Enum.IsDefined(typeof(TipoPlan), plan)) throw new OperacionInvalida("Tipo de actividad desconocido.");
+            await svc.MarcarSinActividadAsync(id, User.ToSesion(), (TipoPlan)plan);
+            TempData["Mensaje"] = $"Marcamos «{Validador.NombreActividad((TipoPlan)plan)}» como sin actividad: se cargó 0 en todo ese plan.";
+        }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Editar), new { id, paso, plan });
     }
 
     [HttpPost("Plan/Rango/{id:long}")]
@@ -339,7 +354,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         {
             var bloques = await AreasDeLaEmpresaAsync(cuit);
             if (bloques is null) return RedirectToAction(nameof(Index), new { cuit });
-            var bytes = await svc.PlantillaAsync(User.ToSesion(), bloques, await tiposProvider.TodosAsync());
+            var bytes = await svc.PlantillaAsync(User.ToSesion(), bloques);
             var ciclo = await svc.CicloAbiertoAsync();
             return File(bytes, TipoXlsx, $"Plan_{ciclo?.Anio}_planilla_de_carga.xlsx");
         }
@@ -362,7 +377,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
             var bloques = await AreasDeLaEmpresaAsync(cuit) ?? throw new OperacionInvalida("No hay áreas para importar.");
             await using var ms = new MemoryStream();
             await archivo.CopyToAsync(ms); ms.Position = 0;
-            var r = await svc.ImportarAsync(User.ToSesion(), bloques, await tiposProvider.TodosAsync(), ms);
+            var r = await svc.ImportarAsync(User.ToSesion(), bloques, ms);
             vm.Errores = r.Errores.ToList(); vm.Truncado = r.Truncado; vm.Areas = r.Areas.ToList();
         }
         catch (HttpRequestException) { vm.Errores.Add(new ErrorImportacion("(sistema)", null, null, "No se pudo consultar Legajos de Áreas en este momento. Probá de nuevo en unos minutos.")); }
@@ -381,7 +396,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
             var p = await svc.ObtenerAsync(id, User.ToSesion());
             if (p.Estado == EstadoPresentacion.Borrador) return RedirectToAction(nameof(Editar), new { id });
             var mails = await db.EnviosMail.AsNoTracking().Where(m => m.PresentacionId == id).OrderByDescending(m => m.Fecha).FirstOrDefaultAsync();
-            return View(new ComprobanteVm { P = p, Calc = Calculadora.CalcularPlan(p.TipoPlan, p.Valores), Mail = mails });
+            return View(new ComprobanteVm { P = p, Planes = p.TiposCargados().DefaultIfEmpty(p.TipoPlan).Select(t => (t, Calculadora.CalcularPlan(t, p.Valores.Where(v => p.ActividadDe(v) == t)))).ToList(), Mail = mails });
         }
         catch (OperacionInvalida) { return NotFound(); }
         catch (UnauthorizedAccessException) { return Forbid(); }

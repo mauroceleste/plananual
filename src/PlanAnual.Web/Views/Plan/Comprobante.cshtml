@@ -1,6 +1,6 @@
 @model ComprobanteVm
 @{ var p = Model.P; var asiste = User.ToSesion().EsAsistencia(p.Cuit); ViewData["Title"] = "Comprobante " + p.NumeroComprobante; ViewData["Ancha"] = true;
-   string Nom(string cod) => CatalogoCampos.Buscar(p.TipoPlan, cod)?.Nombre ?? cod; }
+   string Nom(string cod) => CatalogoCampos.Buscar(TipoPlan.Convencional, cod)?.Nombre ?? CatalogoCampos.Buscar(TipoPlan.Cench, cod)?.Nombre ?? cod; }
 <div class="container-xl is-wide py-4">
     <div class="page-head">
         <div><span class="page-head__eyebrow">@p.Ciclo!.Nombre</span><h1>@p.NombreArea@(p.NombreArea == p.NombreBloque ? "" : " - " + p.NombreBloque)</h1>
@@ -22,11 +22,13 @@
     {
         <div class="alert @(m.Enviado ? "alert-info" : "alert-warning")">@Url.Icono("mail")<div>@(m.Enviado ? "Se envió el aviso por mail a: " + m.Destinatarios : "No se pudo enviar el aviso por mail (" + m.Error + "). La presentación quedó registrada igual.")</div></div>
     }
-    <div class="panel"><div class="panel__head"><h2 class="panel__title">@Url.Icono("chart") Resumen por año</h2></div>
+    @foreach (var (tipoPlan, calcPlan) in Model.Planes)
+    {
+    <div class="panel @(tipoPlan != Model.Planes[0].Tipo ? "mt-4" : "")"><div class="panel__head"><h2 class="panel__title">@Url.Icono("chart") Resumen por año@(Model.Planes.Count > 1 ? " · " + Validador.NombreActividad(tipoPlan) : "")</h2></div>
         <div class="table-responsive"><table class="table data-table">
             <thead><tr><th>Año</th><th class="text-end">@Nom("pozos_perforados")</th><th class="text-end">@Nom("inv_total") (MMUSD)</th><th class="text-end">@Nom("prod_petroleo") (MMbbl)</th><th class="text-end">@Nom("prod_gas") (MMm3)</th><th class="text-end">@Nom("flujo_fondos") (MMUSD)</th></tr></thead>
             <tbody>
-            @foreach (var (anio, f) in Model.Calc)
+            @foreach (var (anio, f) in calcPlan)
             {
                 <tr><td class="t-num"><strong>@anio</strong>@(anio == p.Ciclo.Anio ? " · firme" : "")</td>
                     <td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("pozos_perforados"))</td><td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("inv_total"))</td>
@@ -34,6 +36,7 @@
                     <td class="t-num text-end">@Formato.Num2(f.GetValueOrDefault("flujo_fondos"))</td></tr>
             }
             </tbody></table></div></div>
+    }
     <div class="panel mt-4"><div class="panel__head"><h2 class="panel__title">@Url.Icono("paperclip") Anexos</h2></div>
         @if (!p.Anexos.Any()) { <p class="text-muted mb-0">No se adjuntaron anexos.</p> }
         else { <div class="file-list">@foreach (var a in p.Anexos) { <a class="file-card" asp-action="AnexoDescargar" asp-route-id="@p.Id" asp-route-anexoId="@a.Id">@Url.Icono("file")<span><strong>@a.NombreArchivo</strong><br /><small class="text-muted">@(AnexosRequeridos.Buscar(a.Tipo)?.Titulo(p.Ciclo!.Anio) ?? a.Tipo) · @(a.Tamano / 1024) KB</small></span></a> }</div> }

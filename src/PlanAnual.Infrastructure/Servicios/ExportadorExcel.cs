@@ -30,6 +30,13 @@ public static class ExportadorExcel
 
     public static string GrupoDe(CampoDef c) => Grupo(c);
 
+    /// <summary>
+    /// Columnas de la planilla unificada: todos los campos de los dos planes, cada código una sola vez y en el orden de la planilla oficial.
+    /// Qué campos corresponden a cada tipo se resuelve fila por fila con <see cref="CatalogoCampos.Buscar"/>.
+    /// </summary>
+    public static IReadOnlyList<CampoDef> ColumnasUnificadas() =>
+        CatalogoCampos.Todos.Where(c => c.Codigo != "gto_total").GroupBy(c => c.Codigo).Select(g => g.First()).ToList();
+
     static string Grupo(CampoDef c) => GrupoOficial.GetValueOrDefault(c.Codigo) ?? c.Grupo switch
     {
         CatalogoCampos.GProduccion => "Producción y Venta",
@@ -37,12 +44,12 @@ public static class ExportadorExcel
         _ => c.Grupo
     };
 
-    public static byte[] Planilla(Presentacion p)
+    /// <summary>Hoja de un plan (una sola actividad: <paramref name="p"/> viene de <see cref="Presentacion.ParaTipo"/>).</summary>
+    static void HojaPlan(XLWorkbook wb, Presentacion p, string nombreHoja)
     {
         var periodos = Calculadora.CalcularPeriodos(p.TipoPlan, p.Valores);
         var cols = Columnas(p.TipoPlan);
-        using var wb = new XLWorkbook();
-        var ws = wb.Worksheets.Add("Plan de Desarrollo ");
+        var ws = wb.Worksheets.Add(nombreHoja);
 
         ws.Cell(2, 2).Value = "Período";
         ws.Range(2, 2, 4, 2).Merge();
@@ -110,6 +117,14 @@ public static class ExportadorExcel
                 cols[i].DecimalesMax == 0 ? "#,##0" : cols[i].DecimalesMax == 2 ? "#,##0.00" : "#,##0.00####";
         ws.Column(2).Width = 14; ws.Columns(3, 2 + cols.Count).Width = 16; ws.Row(3).Height = 48;
         ws.SheetView.FreezeRows(4); ws.SheetView.FreezeColumns(2);
+    }
+
+    /// <summary>Una hoja por plan de actividad (Convencional y/o No Convencional) más la hoja con los datos de la presentación.</summary>
+    public static byte[] Planilla(Presentacion p)
+    {
+        using var wb = new XLWorkbook();
+        var tipos = p.TiposCargados().DefaultIfEmpty(p.TipoPlan).ToList();
+        foreach (var t in tipos) HojaPlan(wb, p.ParaTipo(t), tipos.Count == 1 ? "Plan de Desarrollo " : Validador.NombreActividad(t));
 
         // Datos de la presentación: trazabilidad de lo que se está leyendo.
         var info = wb.Worksheets.Add("Presentación");
@@ -117,7 +132,7 @@ public static class ExportadorExcel
         {
             ("Convocatoria", p.Ciclo?.Nombre ?? ""), ("Empresa", p.RazonSocial), ("CUIT", p.Cuit),
             ("Área", p.NombreArea == p.NombreBloque ? p.NombreArea : $"{p.NombreArea} - {p.NombreBloque}"),
-            ("Tipo de plan", p.TipoPlan == TipoPlan.Cench ? "CENCH (no convencional)" : "Convencional"),
+            ("Tipo de actividad", string.Join(" y ", tipos.Select(t => t == TipoPlan.Cench ? "No Convencional (CENCH)" : "Convencional"))),
             ("Versión", p.Version.ToString()), ("Estado", p.Estado == EstadoPresentacion.Borrador ? "BORRADOR (no enviada)" : p.Estado.ToString()),
             ("Comprobante", p.NumeroComprobante ?? "—"), ("Enviada", p.EnviadaEn?.ToString("dd/MM/yyyy HH:mm") ?? "—"),
             ("Enviada por", p.EnviadaPor ?? "—"), ("Asistencia de Administración", p.AsistidaPor ?? "No"),

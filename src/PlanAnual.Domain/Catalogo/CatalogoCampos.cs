@@ -29,7 +29,7 @@ public sealed record CampoDef(
 
     /// <summary>
     /// Flujos (inversión, gastos, producción, ventas, cantidades): se suman. Capacidades diarias y precios: promedio.
-    /// Equipos y set de fracturas: máximo del año. Desarrollo de recursos (acumulado): el último mes.
+    /// Equipos y set de fracturas: máximo por periodo. Desarrollo de recursos (acumulado): el último mes.
     /// </summary>
     public Agregacion Agregacion => Codigo is "equipos_perforacion" or "set_fracturas" ? Agregacion.Maximo
         : Codigo == "desarrollo_recursos" ? Agregacion.Ultimo
@@ -77,7 +77,7 @@ public static class CatalogoCampos
     static readonly string[] GastosConv =
     {
         "gto_salarios", "gto_pulling", "gto_workover", "gto_energia", "gto_quimicos", "gto_compresion",
-        "gto_vehiculos", "gto_superficiarios", "gto_servidumbres", "gto_canon", "gto_tasas", "gto_otros"
+        "gto_vehiculos", "gto_superficiarios", "gto_servidumbres", "gto_canon", "gto_canon_extra", "gto_renta_extra", "gto_tasas", "gto_otros"
     };
 
     public static readonly IReadOnlyList<CampoDef> Todos = new List<CampoDef>
@@ -85,8 +85,8 @@ public static class CatalogoCampos
         // Pozos
         new("pozos_perforados", GPozos, "Pozos productores perforados", "#", Ambos, Entero: true),
         new("pozos_conectados", GPozos, "Pozos productores conectados", "#", Ambos, Entero: true),
-        new("equipos_perforacion", GPozos, "Equipos de perforación (máximo del año)", "#", Ambos, Decimales: 2),
-        new("set_fracturas", GPozos, "Set de fracturas (máximo del año)", "#", Ambos, Decimales: 2),
+        new("equipos_perforacion", GPozos, "Equipos de perforación (máximo por periodo)", "#", Ambos, Decimales: 2),
+        new("set_fracturas", GPozos, "Set de fracturas (máximo por periodo)", "#", Ambos, Decimales: 2),
         new("fracturas", GPozos, "Fracturas (etapas del año)", "#", Ambos, Entero: true),
         new("pozos_abandonar", GPozos, "Pozos a abandonar", "#", Ambos, Entero: true),
         new("act_pulling", GPozos, "Act. Pulling", "#", Conv, "Pozos intervenidos con pulling en el año.", Entero: true),
@@ -131,9 +131,11 @@ public static class CatalogoCampos
         new("gto_superficiarios", GGastos, "Superficiarios", "MMUSD", Conv),
         new("gto_servidumbres", GGastos, "Servidumbres", "MMUSD", Conv),
         new("gto_canon", GGastos, "Canon hidrocarburífero", "MMUSD", Conv),
+        new("gto_canon_extra", GGastos, "Canon Extraordinario de Producción", "MMUSD", Ambos),
+        new("gto_renta_extra", GGastos, "Renta Extraordinaria", "MMUSD", Ambos),
         new("gto_tasas", GGastos, "Tasas", "MMUSD", Conv),
         new("gto_otros", GGastos, "Otros", "MMUSD", Conv, "Solo con justificación."),
-        new("gto_total", GGastos, "Total gastos operativos", "MMUSD", Cench, Suma: new[] { "gto_fijo", "gto_variable" }),
+        new("gto_total", GGastos, "Total gastos operativos", "MMUSD", Cench, Suma: new[] { "gto_fijo", "gto_variable", "gto_canon_extra", "gto_renta_extra" }),
         new("gto_total", GGastos, "Total gastos operativos", "MMUSD", Conv, Suma: GastosConv),
 
         // Producción y venta
