@@ -89,6 +89,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             AnioDesde = ciclo.Anio, AnioHasta = ciclo.Anio + 4, Version = 1, Estado = EstadoPresentacion.Borrador,
             UsuarioId = u.Id, UsuarioNombre = u.Nombre, UsuarioEmail = u.Email, CreadaEn = ahora, ModificadaEn = ahora
         };
+        Registrar(p, u, "Área", null, "Se inició la carga");
         RegistrarAsistencia(p, u);
         db.Presentaciones.Add(p);
         await db.SaveChangesAsync();
@@ -103,6 +104,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         var limpio = string.IsNullOrWhiteSpace(expediente) ? null : expediente.Trim();
         if (limpio is { Length: > 80 }) throw new OperacionInvalida("El número de expediente es demasiado largo (máximo 80 caracteres).");
         if (limpio is not null && limpio.Any(char.IsControl)) throw new OperacionInvalida("El número de expediente tiene caracteres no válidos.");
+        if (p.ExpedienteGde != limpio) Registrar(p, u, "Expediente GDE", p.ExpedienteGde, limpio);
         p.ExpedienteGde = limpio;
         await db.SaveChangesAsync();
     }
@@ -177,6 +179,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
                 Tamano = a.Tamano, Sha256 = a.Sha256, SubidoEn = a.SubidoEn
             }).ToList()
         };
+        Registrar(nueva, u, "Rectificatoria", null, $"Se creó la versión {nueva.Version} a partir de la v{origen.Version}");
         RegistrarAsistencia(nueva, u);
         db.Presentaciones.Add(nueva);
         await db.SaveChangesAsync();
@@ -212,6 +215,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             else actual.Valor = c.Valor;
         }
         p.ModificadaEn = DateTime.Now;
+        await RegistrarEdicionValoresAsync(p, u, tipo, celdas.Count);
         RegistrarAsistencia(p, u);
         await db.SaveChangesAsync();
 
@@ -231,6 +235,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         if (!Presentacion.Actividades.Contains(tipo)) throw new OperacionInvalida("Tipo de actividad desconocido.");
         RellenarConCeros(p, tipo, p.Valores);
         p.ModificadaEn = DateTime.Now;
+        Registrar(p, u, Validador.NombreActividad(tipo), null, "Declarado sin actividad (todo en 0)");
         RegistrarAsistencia(p, u);
         await db.SaveChangesAsync();
     }
@@ -261,10 +266,13 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             if (t.Length > 4000) throw new OperacionInvalida($"«{cual}» supera los 4000 caracteres.");
             return t;
         }
+        var antes = Validador.TextosBloque4.Select(t => t.Valor(p)).ToArray();
         p.ConflictosSuperficiarios = Limpio(conflictos, Validador.TextosBloque4[0].Titulo);
         p.EquiposContratosFirmes = Limpio(contratosFirmes, Validador.TextosBloque4[1].Titulo);
         p.EquiposPlazos = Limpio(plazos, Validador.TextosBloque4[2].Titulo);
         p.EquiposCostos = Limpio(costos, Validador.TextosBloque4[3].Titulo);
+        for (var i = 0; i < antes.Length; i++)
+            if (antes[i] != Validador.TextosBloque4[i].Valor(p)) Registrar(p, u, "Restricciones · " + Validador.TextosBloque4[i].Titulo, antes[i], Validador.TextosBloque4[i].Valor(p));
         p.ModificadaEn = DateTime.Now;
         RegistrarAsistencia(p, u);
         await db.SaveChangesAsync();
@@ -276,10 +284,12 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         await ExigirEditableAsync(p, u);
         if (desde > hasta || hasta - desde > 60) throw new OperacionInvalida("Rango de años inválido.");
         if (desde != p.Ciclo!.Anio) throw new OperacionInvalida($"La planilla comienza en {p.Ciclo.Anio}, el año de la convocatoria (se carga mes por mes).");
+        var antesRango = $"{p.AnioDesde}–{p.AnioHasta}";
         p.AnioDesde = desde; p.AnioHasta = hasta;
         var fuera = p.Valores.Where(v => v.Anio < desde || v.Anio > hasta).ToList();
         db.PlanValores.RemoveRange(fuera);
         p.ModificadaEn = DateTime.Now;
+        if (antesRango != $"{desde}–{hasta}") Registrar(p, u, "Años de la planilla", antesRango, $"{desde}–{hasta}");
         RegistrarAsistencia(p, u);
         await db.SaveChangesAsync();
     }
@@ -292,6 +302,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         RegistrarAsistencia(p, u);
         var a = new Anexo { PresentacionId = id, Tipo = tipo, NombreArchivo = nombre, RutaAlmacenada = ruta, Tamano = tamano, Sha256 = sha256, SubidoEn = DateTime.Now };
         db.Anexos.Add(a);
+        Registrar(p, u, "Adjunto - " + NombreCortoAnexo(tipo), null, nombre);
         await db.SaveChangesAsync();
         return a;
     }
@@ -304,6 +315,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         if (a is null) return;
         RegistrarAsistencia(p, u);
         db.Anexos.Remove(a);
+        Registrar(p, u, "Adjunto - " + NombreCortoAnexo(a.Tipo), a.NombreArchivo, "(eliminado)");
         await db.SaveChangesAsync();
     }
 
@@ -337,6 +349,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         if (p.Version > 1)
             foreach (var s in await db.SolicitudesRectificacion.Where(x => x.CicloId == p.CicloId && x.Cuit == p.Cuit && x.IdBloque == p.IdBloque && x.Estado == EstadoSolicitud.Habilitada).ToListAsync())
                 s.Estado = EstadoSolicitud.Usada;
+        Registrar(p, u, "Presentación", null, $"Enviada v{p.Version} · comprobante {p.NumeroComprobante}");
         await db.SaveChangesAsync();
 
         await EnviarMailAsync(p, u, urlComprobante);
@@ -444,6 +457,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             }
             p.ModificadaEn = DateTime.Now;
             RegistrarAsistencia(p, u);
+            Registrar(p, u, "Importación de Excel", null, string.Join(" · ", area.Planes.Select(x => Validador.NombreActividad(x.Tipo) + (x.SinActividad ? ": sin actividad" : ": con actividad"))));
         }
         if (errores.Count > 0) return new ResultadoImportacion(errores, false, []);   // al salir sin confirmar, la transacción se deshace
         await db.SaveChangesAsync();
@@ -499,6 +513,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
             PresentacionId = origen.Id, Motivo = motivo, SolicitadaPor = u.Nombre, SolicitadaEmail = u.Email, SolicitadaEn = DateTime.Now
         };
         db.SolicitudesRectificacion.Add(s);
+        RegistrarDe(s.CicloId, s.Cuit, s.IdBloque, origen.Version, u.Nombre, "Pedido de rectificación", null, "Pendiente: " + motivo);
         await db.SaveChangesAsync();
 
         Func<string?, string> h = WebUtility.HtmlEncode!;
@@ -529,6 +544,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         s.Estado = EstadoSolicitud.Habilitada;
         s.ResueltaPor = u.Nombre; s.ResueltaEn = DateTime.Now;
         s.HabilitadaHasta = s.ResueltaEn.Value.AddDays(SolicitudRectificacion.DiasDeHabilitacion);
+        RegistrarDe(s.CicloId, s.Cuit, s.IdBloque, null, u.Nombre, "Pedido de rectificación", null, $"Habilitado hasta el {s.HabilitadaHasta:dd/MM/yyyy HH:mm}");
         await db.SaveChangesAsync();
 
         Func<string?, string> h = WebUtility.HtmlEncode!;
@@ -550,6 +566,7 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         if (s.Estado != EstadoSolicitud.Pendiente) throw new OperacionInvalida("Esta solicitud ya fue resuelta.");
         s.Estado = EstadoSolicitud.Rechazada;
         s.ResueltaPor = u.Nombre; s.ResueltaEn = DateTime.Now;
+        RegistrarDe(s.CicloId, s.Cuit, s.IdBloque, null, u.Nombre, "Pedido de rectificación", null, "Rechazado");
         await db.SaveChangesAsync();
 
         Func<string?, string> h = WebUtility.HtmlEncode!;
@@ -620,6 +637,57 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         if (p.Estado != EstadoPresentacion.Borrador) throw new OperacionInvalida("La presentación ya fue enviada y no se puede modificar.");
         if (p.Version > 1 && u.Rol != Rol.Administrador && await HabilitacionVigenteAsync(p.CicloId, p.Cuit, p.IdBloque) is null)
             throw new OperacionInvalida("La autorización para rectificar venció. Pedila de nuevo a la Subsecretaría.");
+    }
+
+    // ---------- Historial de modificaciones del área (solo lo ve Administración) ----------
+
+    static string? Recortar(string? t, int max) => t is null ? null : t.Length <= max ? t : t[..(max - 1)] + "…";
+
+    /// <summary>Agrega un renglón al historial del área; se guarda con el próximo SaveChanges.</summary>
+    void Registrar(Presentacion p, UsuarioSesion u, string campo, string? anterior, string? nuevo) =>
+        RegistrarDe(p.CicloId, p.Cuit, p.IdBloque, p.Version, u.Nombre, campo, anterior, nuevo);
+
+    void RegistrarDe(int cicloId, string cuit, int idBloque, int? version, string usuario, string campo, string? anterior, string? nuevo) =>
+        db.HistorialAreas.Add(new HistorialArea
+        {
+            CicloId = cicloId, Cuit = cuit, IdBloque = idBloque, Version = version, Fecha = DateTime.Now,
+            Usuario = Recortar(usuario, 150)!, Campo = Recortar(campo, 200)!, Anterior = Recortar(anterior, 1000), Nuevo = Recortar(nuevo, 1000)
+        });
+
+    /// <summary>
+    /// Las celdas se guardan solas, de a pocas por vez: en el historial se juntan en un solo renglón («Valores · Plan X: 37 modificaciones»)
+    /// mientras la misma persona siga editando ese plan y no haya pasado otra cosa en el área.
+    /// </summary>
+    async Task RegistrarEdicionValoresAsync(Presentacion p, UsuarioSesion u, TipoPlan tipo, int cantidad)
+    {
+        var campo = $"Valores · {Validador.NombreActividad(tipo)}";
+        var ahora = DateTime.Now;
+        var ultimo = await db.HistorialAreas.Where(h => h.CicloId == p.CicloId && h.Cuit == p.Cuit && h.IdBloque == p.IdBloque)
+            .OrderByDescending(h => h.Fecha).ThenByDescending(h => h.Id).FirstOrDefaultAsync();
+        if (ultimo is not null && ultimo.Campo == campo && ultimo.Usuario == u.Nombre && ultimo.Version == p.Version && ahora - ultimo.Fecha < TimeSpan.FromMinutes(30))
+        {
+            var previas = int.TryParse((ultimo.Nuevo ?? "").Split(' ')[0], out var n) ? n : 0;
+            ultimo.Nuevo = $"{previas + cantidad} modificaciones"; ultimo.Fecha = ahora;
+        }
+        else RegistrarDe(p.CicloId, p.Cuit, p.IdBloque, p.Version, u.Nombre, campo, null, $"{cantidad} modificaciones");
+    }
+
+    static string NombreCortoAnexo(string tipo) => tipo switch
+    {
+        "fundamento_flujo_fondos" => "Fundamentación del flujo de fondos",
+        "flujograma" => "Instalaciones",
+        "paradas_planta" => "Paradas de planta",
+        "presentacion_plan" => "Presentación del Plan",
+        "otro" => "Otros",
+        _ => tipo,
+    };
+
+    /// <summary>Historial de un área, lo más nuevo primero. Solo Administración.</summary>
+    public async Task<List<HistorialArea>> HistorialAsync(UsuarioSesion u, int cicloId, string cuit, int idBloque, int tomar = 300)
+    {
+        SoloAdmin(u);
+        return await db.HistorialAreas.AsNoTracking().Where(h => h.CicloId == cicloId && h.Cuit == cuit && h.IdBloque == idBloque)
+            .OrderByDescending(h => h.Fecha).ThenByDescending(h => h.Id).Take(tomar).ToListAsync();
     }
 
     /// <summary>Si Administración toca la planilla de una empresa, queda constancia con su nombre.</summary>

@@ -49,6 +49,13 @@
                 .then(mostrarObservaciones).catch(function (x) { error(x.message); });
             return;
         }
+        var hist = e.target.closest('[data-hist-area]');
+        if (hist) {
+            botonObs = null; titulo.textContent = 'Historial de modificaciones · ' + hist.dataset.area; cargando(); modal.show();
+            pedir('Plan/HistorialArea?cuit=' + encodeURIComponent(hist.dataset.cuit) + '&idBloque=' + encodeURIComponent(hist.dataset.histArea))
+                .then(function (h) { cuerpo.innerHTML = h; }).catch(function (x) { error(x.message); });
+            return;
+        }
         var his = e.target.closest('[data-historial]');
         if (his) {
             botonObs = null; titulo.textContent = 'Historial del expediente · ' + his.dataset.area; modal.show();

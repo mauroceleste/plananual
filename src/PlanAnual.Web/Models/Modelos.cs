@@ -33,6 +33,8 @@ public sealed record FilaPeriodo(int Anio, int Mes, bool EsSubtotal = false)
 
 public sealed record PasoVm(int Indice, string Titulo, TipoPaso Tipo, List<CampoDef> Campos);
 
+public sealed record ResumenPlan(string Estado, decimal? InversionFirme);
+
 public sealed class EditarVm
 {
     public required Presentacion P { get; init; }
@@ -40,6 +42,8 @@ public sealed class EditarVm
     public required TipoPlan TipoActual { get; init; }
     /// <summary>Planes que ya tienen valores cargados.</summary>
     public required IReadOnlyList<TipoPlan> Cargados { get; init; }
+    /// <summary>Estado de cada plan para las tarjetas: sin datos, sin actividad (todo en 0) o cargado, y su inversión del año firme.</summary>
+    public required Dictionary<TipoPlan, ResumenPlan> Resumen { get; init; }
     public required List<PasoVm> Pasos { get; init; }
     public required bool SoloLectura { get; init; }
     /// <summary>Filas calculadas por clave (año*100+mes; mes 0 = anual o subtotal anual).</summary>

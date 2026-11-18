@@ -167,3 +167,43 @@
 
 .chart-tablewrap { max-height: 18rem; overflow: auto; }
 .chart-table th, .chart-table td { font-size: .82rem; }
+
+/* ---- Planes de actividad (Convencional / No Convencional): tarjetas con su estado ---- */
+.plan-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 0 0 .75rem; padding: 0; list-style: none; }
+.plan-tab {
+    display: flex; align-items: center; gap: .85rem; height: 100%; padding: .8rem 1rem; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-2); text-decoration: none;
+    transition: border-color .15s var(--ease), background .15s var(--ease), box-shadow .15s var(--ease);
+}
+.plan-tab:hover { border-color: var(--border-strong); background: var(--surface-2); color: var(--text); }
+.plan-tab.is-active { border-color: var(--accent); background: var(--surface); color: var(--text); box-shadow: inset 0 -3px 0 var(--accent); }
+.plan-tab__icon { display: inline-grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; border-radius: 12px; background: var(--surface-3); color: var(--text-2); }
+.plan-tab.is-active .plan-tab__icon { background: var(--accent); color: var(--on-accent); }
+.plan-tab__icon .icon { font-size: 1.25rem; }
+.plan-tab__body { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.plan-tab__titulo { font-weight: 700; font-size: .95rem; line-height: 1.2; }
+.plan-tab__dato { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plan-tab .chip { flex: none; }
+.plan-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem .75rem; margin: 0 0 1rem; }
+.plan-barra__txt { margin: 0; font-size: .88rem; color: var(--text-2); }
+@media (max-width: 640px) { .plan-tabs { grid-template-columns: 1fr; } }
+
+/* ---- Modales de Administración (adjuntos, historial): tabla con el diseño de Registro de Empresas ---- */
+.adj-scroll { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.adj-tabla thead th {
+    position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--muted); font-size: .72rem; font-weight: 700;
+    letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.adj-tabla td { vertical-align: middle; }
+.adj-nombre { max-width: 360px; }
+.adj-categoria { max-width: 260px; }
+.adj-categoria span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: .85rem; }
+.adj-tipo { display: inline-block; padding: .08rem .5rem; border-radius: 6px; font-size: .66rem; font-weight: 700; letter-spacing: .04em; color: #fff; }
+.adj-tipo--pdf { background: #c0392b; }
+.adj-tipo--word { background: #2b6cb0; }
+.adj-tipo--excel { background: #2f855a; }
+.adj-tipo--imagen { background: #d69e2e; color: #1a202c; }
+.adj-tipo--otro { background: #6b7a86; }
+.hist-valor { max-width: 280px; font-size: .85rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+.hist-valor del { color: var(--danger); opacity: .85; }
+.hist-valor ins { color: var(--ok-text); text-decoration: none; font-weight: 600; }

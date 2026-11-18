@@ -91,6 +91,17 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         return PartialView("_HistorialExpediente", await gde.HistorialAsync(numero ?? "", ct));
     }
 
+    /// <summary>Historial de modificaciones de un área (quién cambió qué y cuándo), para el modal del listado. Solo Administración.</summary>
+    [HttpGet("Plan/HistorialArea")]
+    public async Task<IActionResult> HistorialArea(string cuit, int idBloque)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Administrador) return Forbid();
+        var ciclo = await svc.CicloAbiertoAsync();
+        if (ciclo is null || string.IsNullOrEmpty(cuit) || !cuit.All(char.IsDigit)) return BadRequest(new { error = "Datos no válidos." });
+        return PartialView("_HistorialArea", await svc.HistorialAsync(u, ciclo.Id, cuit, idBloque));
+    }
+
     [HttpGet("Plan/ObservacionesArea")]
     public async Task<IActionResult> ObservacionesArea(string cuit, int idBloque) => await ListaObservaciones(cuit, idBloque);
 
@@ -179,7 +190,7 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         var tipoActual = plan is { } pl && Enum.IsDefined(typeof(TipoPlan), pl) ? (TipoPlan)pl : p.TipoPlan;
         var vm = new EditarVm
         {
-            P = p, TipoActual = tipoActual, Cargados = p.TiposCargados(), Pasos = PasosDe(tipoActual), SoloLectura = p.Estado != EstadoPresentacion.Borrador || !u.PuedeEditar(p.Cuit),
+            P = p, TipoActual = tipoActual, Cargados = p.TiposCargados(), Resumen = ResumenDePlanes(p), Pasos = PasosDe(tipoActual), SoloLectura = p.Estado != EstadoPresentacion.Borrador || !u.PuedeEditar(p.Cuit),
             Calc = Calculadora.CalcularPeriodos(tipoActual, p.Valores.Where(v => p.ActividadDe(v) == tipoActual)),
             Ingresados = p.Valores.Where(v => v.Valor.HasValue && p.ActividadDe(v) == tipoActual).ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor!.Value),
         };
@@ -197,6 +208,16 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         }
         return View(vm);
     }
+
+    /// <summary>Estado de cada plan de actividad para las tarjetas del formulario.</summary>
+    static Dictionary<TipoPlan, ResumenPlan> ResumenDePlanes(Presentacion p) =>
+        Presentacion.Actividades.ToDictionary(t => t, t =>
+        {
+            var valores = p.Valores.Where(v => v.Valor.HasValue && p.ActividadDe(v) == t).ToList();
+            if (valores.Count == 0) return new ResumenPlan("Sin datos", null);
+            var inversion = Calculadora.CalcularPlan(t, valores).GetValueOrDefault(p.Ciclo!.Anio)?.GetValueOrDefault("inv_total");
+            return new ResumenPlan(valores.All(v => v.Valor == 0) ? "Sin actividad" : "Cargado", inversion);
+        });
 
     public record GuardarReq(List<CeldaDto> Celdas);
 

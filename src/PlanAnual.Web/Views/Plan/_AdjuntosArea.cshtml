@@ -1,21 +1,52 @@
-@* Contenido del modal de adjuntos de un área (solo Administración). *@
+@* Contenido del modal de adjuntos de un área (solo Administración). Mismo diseño que el modal de archivos de Registro de Empresas:
+   nombre con etiqueta de color por tipo de archivo, categoría, fecha de carga y botón Descargar. *@
 @model Presentacion
+@functions {
+    static (string Texto, string Clase) Etiqueta(string nombre) => System.IO.Path.GetExtension(nombre).ToLowerInvariant() switch
+    {
+        ".pdf" => ("PDF", "adj-tipo--pdf"),
+        ".doc" or ".docx" => ("WORD", "adj-tipo--word"),
+        ".xls" or ".xlsx" or ".xlsb" or ".csv" => ("EXCEL", "adj-tipo--excel"),
+        ".jpg" or ".jpeg" or ".png" => ("IMAGEN", "adj-tipo--imagen"),
+        ".ppt" or ".pptx" => ("PPT", "adj-tipo--word"),
+        var e when e.Length > 1 => (e[1..].ToUpperInvariant(), "adj-tipo--otro"),
+        _ => ("ARCHIVO", "adj-tipo--otro"),
+    };
+}
 <p class="small text-muted mb-2">@Model.NombreArea · versión @Model.Version @(Model.Estado == EstadoPresentacion.Borrador ? "(borrador)" : "(enviada)")</p>
 @if (Model.Anexos.Count == 0)
 {
-    <p class="mb-0">Esta área todavía no tiene adjuntos.</p>
+    <div class="text-center text-muted py-4">
+        @Url.Icono("info")
+        <p class="mb-0 mt-2">No hay archivos adjuntos disponibles para esta área.</p>
+    </div>
 }
 else
 {
-    <ul class="list-unstyled mb-0">
-        @foreach (var a in Model.Anexos.OrderBy(a => a.Tipo).ThenBy(a => a.SubidoEn))
-        {
-            var tipo = AnexosRequeridos.Buscar(a.Tipo)?.Titulo(Model.Ciclo?.Anio ?? 0) ?? a.Tipo;
-            <li class="py-2 border-bottom">
-                <div class="small text-muted">@tipo</div>
-                <a asp-action="AnexoDescargar" asp-route-id="@Model.Id" asp-route-anexoId="@a.Id">@Url.Icono("file") @a.NombreArchivo</a>
-                <small class="text-muted ms-1">@(a.Tamano < 1048576 ? (a.Tamano / 1024 + " KB") : ((a.Tamano / 1048576m).ToString("0.0", Formato.AR) + " MB")) · @Formato.Fecha(a.SubidoEn)</small>
-            </li>
-        }
-    </ul>
+    <div class="adj-scroll">
+        <table class="table table-hover align-middle mb-0 adj-tabla">
+            <thead>
+                <tr><th>Nombre del documento</th><th>Categoría</th><th>Fecha de carga</th><th class="text-end">Acción</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var a in Model.Anexos.OrderBy(a => a.Tipo).ThenBy(a => a.SubidoEn))
+                {
+                    var (texto, clase) = Etiqueta(a.NombreArchivo);
+                    var tipo = AnexosRequeridos.Buscar(a.Tipo)?.Titulo(Model.Ciclo?.Anio ?? 0) ?? a.Tipo;
+                    <tr>
+                        <td>
+                            <div class="fw-semibold text-truncate adj-nombre" title="@a.NombreArchivo">@a.NombreArchivo</div>
+                            <span class="adj-tipo @clase">@texto</span>
+                            <small class="text-muted ms-1">@(a.Tamano < 1048576 ? (a.Tamano / 1024 + " KB") : ((a.Tamano / 1048576m).ToString("0.0", Formato.AR) + " MB"))</small>
+                        </td>
+                        <td class="adj-categoria"><span class="text-muted" title="@tipo">@tipo</span></td>
+                        <td class="text-nowrap"><span class="text-muted small">@Url.Icono("calendar") @Formato.Fecha(a.SubidoEn)</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-outline-secondary btn-sm text-nowrap" asp-action="AnexoDescargar" asp-route-id="@Model.Id" asp-route-anexoId="@a.Id" title="Descargar archivo">@Url.Icono("download") Descargar</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 }

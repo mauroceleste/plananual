@@ -14,6 +14,7 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
     public DbSet<EnvioMail> EnviosMail => Set<EnvioMail>();
     public DbSet<SolicitudRectificacion> SolicitudesRectificacion => Set<SolicitudRectificacion>();
     public DbSet<ObservacionInterna> ObservacionesInternas => Set<ObservacionInterna>();
+    public DbSet<HistorialArea> HistorialAreas => Set<HistorialArea>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -91,6 +92,17 @@ public class PlanAnualDbContext(DbContextOptions<PlanAnualDbContext> options) : 
             e.Property(x => x.Texto).HasMaxLength(ObservacionInterna.MaximoTexto);
             e.Property(x => x.UsuarioNombre).HasMaxLength(150);
             e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque });
+            e.HasOne<Ciclo>().WithMany().HasForeignKey(x => x.CicloId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<HistorialArea>(e =>
+        {
+            e.Property(x => x.Cuit).HasMaxLength(11);
+            e.Property(x => x.Usuario).HasMaxLength(150);
+            e.Property(x => x.Campo).HasMaxLength(200);
+            e.Property(x => x.Anterior).HasMaxLength(1000);
+            e.Property(x => x.Nuevo).HasMaxLength(1000);
+            e.HasIndex(x => new { x.CicloId, x.Cuit, x.IdBloque, x.Fecha });
             e.HasOne<Ciclo>().WithMany().HasForeignKey(x => x.CicloId).OnDelete(DeleteBehavior.Restrict);
         });
 

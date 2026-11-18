@@ -15,7 +15,6 @@
             <span class="page-head__eyebrow">@p.Ciclo.Nombre · @p.RazonSocial</span>
             <h1>@nombreArea</h1>
             <p>
-                <span class="chip chip--tag">@Validador.NombreActividad(Model.TipoActual)</span>
                 @if (p.Estado == EstadoPresentacion.Borrador) { <span class="chip chip--warn">Borrador @(p.Version > 1 ? $"· rectificatoria v{p.Version}" : "")</span> }
                 else { <span class="chip chip--ok">Enviada v@(p.Version)</span> }
             </p>
@@ -30,26 +29,32 @@
     @if (p.AsistidaPor is not null) { <div class="alert alert-secondary">@Url.Icono("user")<div>Esta planilla se cargó con asistencia de Administración (@p.AsistidaPor).</div></div> }
     @if (ro) { <div class="alert alert-info">@Url.Icono("lock")<div>Esta versión ya fue enviada y no se puede modificar. <a asp-action="Comprobante" asp-route-id="@p.Id">Ver el comprobante</a>.</div></div> }
 
-    @* Un área puede tener plan Convencional y No Convencional: se carga de a uno; el que no tenga se declara «sin actividad» (0). *@
-    <ul class="nav nav-pills mb-3" aria-label="Plan de actividad">
+    @* Un área puede tener plan Convencional y No Convencional: se carga de a uno; el que no tenga se declara «sin actividad» (todo en 0). *@
+    <div class="plan-tabs" role="group" aria-label="Plan de actividad">
         @foreach (var t in Presentacion.Actividades)
         {
-            var cargado = Model.Cargados.Contains(t);
-            <li class="nav-item">
-                <a class="nav-link @(t == Model.TipoActual ? "active" : "")" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Tipo == TipoPaso.Grilla ? paso.Indice : 0)" asp-route-plan="@((int)t)" data-flush aria-current="@(t == Model.TipoActual ? "page" : null)">
-                    @Validador.NombreActividad(t)
-                    <span class="badge rounded-pill @(cargado ? "text-bg-success" : "text-bg-secondary") ms-1">@(cargado ? "cargado" : "sin datos")</span>
-                </a>
-            </li>
+            var r = Model.Resumen[t];
+            var activo = t == Model.TipoActual;
+            <a class="plan-tab @(activo ? "is-active" : "")" asp-action="Editar" asp-route-id="@p.Id" asp-route-paso="@(paso.Tipo == TipoPaso.Grilla ? paso.Indice : 0)" asp-route-plan="@((int)t)" data-flush aria-current="@(activo ? "page" : null)">
+                <span class="plan-tab__icon">@Url.Icono(t == TipoPlan.Cench ? "layers" : "building")</span>
+                <span class="plan-tab__body">
+                    <span class="plan-tab__titulo">@(t == TipoPlan.Cench ? "No Convencional (CENCH)" : "Convencional")</span>
+                    <span class="plan-tab__dato">@(r.InversionFirme is { } inv && r.Estado == "Cargado" ? $"Inversión {anioFirme}: {Formato.Num2(inv)} MMUSD" : r.Estado == "Sin actividad" ? "Todo en 0" : "Todavía sin valores")</span>
+                </span>
+                <span class="chip @(r.Estado == "Cargado" ? "chip--ok" : r.Estado == "Sin actividad" ? "chip--tag" : "chip--warn")">@r.Estado</span>
+            </a>
         }
-    </ul>
+    </div>
     @if (paso.Tipo == TipoPaso.Grilla && !ro)
     {
-        <form asp-action="SinActividad" asp-route-id="@p.Id" method="post" data-una-vez
-              data-confirmar="Se carga 0 en todo el @Validador.NombreActividad(Model.TipoActual) (reemplaza lo que hubiera). ¿Continuar?" class="mb-3">
-            <input type="hidden" name="plan" value="@((int)Model.TipoActual)" /><input type="hidden" name="paso" value="@paso.Indice" />
-            <button class="btn btn-outline-secondary btn-sm">Esta área no tiene actividad: @(Model.TipoActual == TipoPlan.Cench ? "No Convencional" : "Convencional") (cargar todo en 0)</button>
-        </form>
+        <div class="plan-barra">
+            <p class="plan-barra__txt">Cargando el <strong>@(Model.TipoActual == TipoPlan.Cench ? "plan No Convencional (CENCH)" : "plan Convencional")</strong>. Si el área no tiene este tipo de actividad, declaralo y se completa con 0.</p>
+            <form asp-action="SinActividad" asp-route-id="@p.Id" method="post" data-una-vez
+                  data-confirmar="Se carga 0 en todo el @Validador.NombreActividad(Model.TipoActual) (reemplaza lo que hubiera). ¿Continuar?">
+                <input type="hidden" name="plan" value="@((int)Model.TipoActual)" /><input type="hidden" name="paso" value="@paso.Indice" />
+                <button class="btn btn-outline-secondary btn-sm">Declarar sin actividad (todo en 0)</button>
+            </form>
+        </div>
     }
 
     <nav class="stepper" aria-label="Pasos del formulario">

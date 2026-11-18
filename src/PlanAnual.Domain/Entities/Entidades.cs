@@ -178,6 +178,26 @@ public class ObservacionInterna
     public DateTime CreadaEn { get; set; }
 }
 
+/// <summary>
+/// Un renglón del historial de modificaciones de un área (solo lo ve Administración). Se liga al área y a la convocatoria, no a una versión.
+/// Guarda el valor anterior y el nuevo cuando es un dato puntual (expediente, textos, rango de años) y un resumen cuando son muchas celdas.
+/// </summary>
+public class HistorialArea
+{
+    public long Id { get; set; }
+    public int CicloId { get; set; }
+    public string Cuit { get; set; } = "";
+    public int IdBloque { get; set; }
+    public DateTime Fecha { get; set; }
+    public string Usuario { get; set; } = "";
+    /// <summary>Qué cambió: «Expediente GDE», «Valores · Plan Convencional», «Adjunto - …», «Presentación», etc.</summary>
+    public string Campo { get; set; } = "";
+    public string? Anterior { get; set; }
+    public string? Nuevo { get; set; }
+    /// <summary>Versión de la presentación a la que corresponde el cambio (si aplica).</summary>
+    public int? Version { get; set; }
+}
+
 public class EnvioMail
 {
     public long Id { get; set; }

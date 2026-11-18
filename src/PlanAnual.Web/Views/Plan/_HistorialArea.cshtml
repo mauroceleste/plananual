@@ -1,0 +1,31 @@
+@* Contenido del modal de historial de modificaciones de un área (solo Administración). Mismo diseño que «Ver historial» de Registro de Empresas:
+   fecha, usuario, campo modificado, valor anterior (tachado en rojo) y valor nuevo (subrayado en verde). *@
+@model List<HistorialArea>
+@if (Model.Count == 0)
+{
+    <div class="text-center text-muted py-4">
+        @Url.Icono("info")
+        <p class="mb-0 mt-2">No hay modificaciones registradas para esta área.</p>
+    </div>
+}
+else
+{
+    <p class="small text-muted mb-2">@Model.Count movimiento(s), el más reciente primero. Las celdas del plan se agrupan en un solo renglón mientras la misma persona sigue editando.</p>
+    <div class="adj-scroll">
+        <table class="table table-hover align-middle mb-0 adj-tabla">
+            <thead><tr><th>Fecha</th><th>Usuario</th><th>Campo modificado</th><th>Valor anterior</th><th>Valor nuevo</th></tr></thead>
+            <tbody>
+                @foreach (var h in Model)
+                {
+                    <tr>
+                        <td class="text-nowrap small">@h.Fecha.ToString("dd/MM/yyyy HH:mm")@(h.Version is > 1 ? $" · v{h.Version}" : "")</td>
+                        <td class="small">@h.Usuario</td>
+                        <td><span class="chip chip--tag">@h.Campo</span></td>
+                        <td class="hist-valor">@if (!string.IsNullOrEmpty(h.Anterior)) { <del>@h.Anterior</del> }</td>
+                        <td class="hist-valor">@if (!string.IsNullOrEmpty(h.Nuevo)) { <ins>@h.Nuevo</ins> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
