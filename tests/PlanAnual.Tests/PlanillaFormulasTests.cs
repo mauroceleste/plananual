@@ -33,16 +33,45 @@ public class PlanillaFormulasTests
         return PlanillaExcel.Leer(ms, new Dictionary<int, AreaPlantilla> { [10] = new(10, "Área Alfa") }, 2026);
     }
 
+    /// <summary>Guarda el libro y le deja a una fórmula su valor calculado dentro del archivo, como lo hace Excel (ClosedXML no lo escribe).</summary>
+    static MemoryStream GuardarConValorEnCache(XLWorkbook wb, string formulaSinIgual, string valor)
+    {
+        var ms = new MemoryStream(); wb.SaveAs(ms);
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entrada = zip.Entries.First(e => e.FullName == "xl/worksheets/sheet2.xml");
+            string xml; using (var rd = new StreamReader(entrada.Open())) xml = rd.ReadToEnd();
+            var parche = System.Text.RegularExpressions.Regex.Replace(xml, @"(<(?:x:)?f>" + System.Text.RegularExpressions.Regex.Escape(formulaSinIgual) + @"</(?:x:)?f>)(?:<(?:x:)?v\s*/>|<(?:x:)?v>[^<]*</(?:x:)?v>)?", "$1<x:v>" + valor + "</x:v>");
+            Assert.NotEqual(xml, parche);                                         // la fórmula estaba y se le puso valor
+            entrada.Delete(); var nueva = zip.CreateEntry("xl/worksheets/sheet2.xml");
+            using var wr = new StreamWriter(nueva.Open()); wr.Write(parche);
+        }
+        ms.Position = 0; return ms;
+    }
+
     static int FebreroGas => PlanillaExcel.PrimeraFila + 1;
 
     [Fact]
     public void Una_formula_con_valor_guardado_valido_se_importa_con_ese_valor()
     {
         var wb = Completa();
-        wb.Worksheet(PlanillaExcel.NombreHoja).Cell(FebreroGas, Col("prod_gas")).FormulaA1 = "=2+3";
-        var r = Importar(wb);
+        var celda = wb.Worksheet(PlanillaExcel.NombreHoja).Cell(FebreroGas, Col("prod_gas"));
+        celda.FormulaA1 = "=2+3";
+        using var archivo = GuardarConValorEnCache(wb, "2+3", "5");                // como lo deja Excel: la fórmula con su valor calculado
+        var r = PlanillaExcel.Leer(archivo, new Dictionary<int, AreaPlantilla> { [10] = new(10, "Área Alfa") }, 2026);
         Assert.Empty(r.Errores);
         Assert.Equal(5m, r.Areas[0].Planes[0].Valores.Single(v => v.Campo == "prod_gas" && v.Mes == 2).Valor);
+    }
+
+    [Fact]
+    public void Una_formula_sin_valor_guardado_no_se_calcula_y_se_pide_pegar_valores()
+    {
+        // Archivos de herramientas que no calculan (la fórmula queda sin su valor): no se recalcula (es lento y poco confiable), se informa en la celda.
+        var wb = Completa();
+        wb.Worksheet(PlanillaExcel.NombreHoja).Cell(FebreroGas, Col("prod_gas")).FormulaA1 = "=2+3";
+        var e = Assert.Single(Importar(wb).Errores);
+        Assert.Equal(FebreroGas, e.Fila);
+        Assert.Contains("sin valor calculado", e.Mensaje);
     }
 
     [Theory]

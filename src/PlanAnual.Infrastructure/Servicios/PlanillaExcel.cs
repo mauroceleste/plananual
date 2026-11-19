@@ -329,23 +329,36 @@ public static class PlanillaExcel
 
         var ultimaFila = ws.LastRowUsed()?.RowNumber() ?? 0;
         var bloques = new Dictionary<(int, TipoPlan), Bloque>();
-        bool CeldaVacia(int r, int c) => Leer(ws.Cell(r, c)).Vacia;
+        // Una sola pasada por las celdas con contenido (antes se pedía cada una de a una, creando miles de celdas vacías). Lo que hay en cada celda se lee
+        // recién cuando hace falta: las columnas calculadas tienen fórmulas, y calcularlas una por una es lo más caro (con 30 áreas eran 10 segundos).
+        var grilla = new Dictionary<int, Dictionary<int, Celda>>();
+        if (ultimaFila >= PrimeraFila && ultimaCol >= 1)
+            foreach (var cel in ws.Range(PrimeraFila, 1, ultimaFila, ultimaCol).CellsUsed(XLCellsUsedOptions.Contents))
+            {
+                if (!grilla.TryGetValue(cel.Address.RowNumber, out var fila)) grilla[cel.Address.RowNumber] = fila = [];
+                fila[cel.Address.ColumnNumber] = new Celda(cel);
+            }
+        Leida En(int r, int c) => grilla.TryGetValue(r, out var fila) && fila.TryGetValue(c, out var celda) ? celda.Lectura : SinContenido;
+        bool Hay(int r, int c) => grilla.TryGetValue(r, out var fila) && fila.ContainsKey(c);
+        bool CeldaVacia(int r, int c) => En(r, c).Vacia;
 
         for (int r = PrimeraFila; r <= ultimaFila; r++)
         {
-            var todasVacias = Enumerable.Range(PrimeraColCampo, Math.Max(0, ultimaCol - PrimeraColCampo + 1)).All(c => CeldaVacia(r, c));
-            if (ws.Cell(r, ColCodigo).IsEmpty() && ws.Cell(r, ColAnio).IsEmpty() && ws.Cell(r, ColMes).IsEmpty() && CeldaVacia(r, ColTipo) && CeldaVacia(r, ColActividad) && todasVacias) continue;
+            // Una celda con fórmula cuenta como contenido sin calcularla (en la planilla, las columnas calculadas siempre la tienen).
+            var fila = grilla.GetValueOrDefault(r);
+            var todasVacias = fila is null || !fila.Any(kv => kv.Key >= PrimeraColCampo && (kv.Value.TieneFormula || !CeldaVacia(r, kv.Key)));
+            if (!Hay(r, ColCodigo) && !Hay(r, ColAnio) && !Hay(r, ColMes) && CeldaVacia(r, ColTipo) && CeldaVacia(r, ColActividad) && todasVacias) continue;
 
-            if (!EntEro(ws.Cell(r, ColCodigo), out var codigo)) { Agregar(res, new(hoja, r, "Código de área", "Falta el código de área (columna oculta B). No la borres.")); continue; }
+            if (!EntEro(En(r, ColCodigo), out var codigo)) { Agregar(res, new(hoja, r, "Código de área", "Falta el código de área (columna oculta B). No la borres.")); continue; }
             if (!permitidas.TryGetValue(codigo, out var area)) { Agregar(res, new(hoja, r, "Código de área", $"El código {codigo} no corresponde a ninguna de las áreas de tu empresa.")); continue; }
-            if (TipoDeTexto(Texto(ws.Cell(r, ColTipo))) is not { } tipo) { Agregar(res, new(hoja, r, "Tipo de Actividad", $"{area.Nombre}: el tipo de actividad tiene que ser «Convencional» o «No Convencional». No lo modifiques.")); continue; }
+            if (TipoDeTexto(En(r, ColTipo).Texto) is not { } tipo) { Agregar(res, new(hoja, r, "Tipo de Actividad", $"{area.Nombre}: el tipo de actividad tiene que ser «Convencional» o «No Convencional». No lo modifiques.")); continue; }
 
             // Período
-            if (!EntEro(ws.Cell(r, ColAnio), out var anio)) { Agregar(res, new(hoja, r, "Año", $"{area.Nombre}: el año no es un número.")); continue; }
+            if (!EntEro(En(r, ColAnio), out var anio)) { Agregar(res, new(hoja, r, "Año", $"{area.Nombre}: el año no es un número.")); continue; }
             int mes;
-            var mesTxt = Texto(ws.Cell(r, ColMes));
+            var mesTxt = En(r, ColMes).Texto;
             if (mesTxt == "" || mesTxt.Equals("Anual", StringComparison.OrdinalIgnoreCase)) mes = 0;
-            else if (!EntEro(ws.Cell(r, ColMes), out mes) || mes is < 1 or > 12) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre} {anio}: el mes tiene que ser un número de 1 a 12.")); continue; }
+            else if (!EntEro(En(r, ColMes), out mes) || mes is < 1 or > 12) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre} {anio}: el mes tiene que ser un número de 1 a 12.")); continue; }
             if (anio < anioCiclo) { Agregar(res, new(hoja, r, "Año", $"{area.Nombre}: el plan empieza en {anioCiclo}; {anio} no corresponde.")); continue; }
             if (anio == anioCiclo && mes == 0) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre}: el año {anio} se informa mes por mes (1 a 12).")); continue; }
             if (anio > anioCiclo && mes != 0) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre}: a partir de {anioCiclo + 1} los valores son anuales: dejá el mes en blanco o \"Anual\".")); continue; }
@@ -360,7 +373,7 @@ public static class PlanillaExcel
             if (anio == anioCiclo && mes == 1)
             {
                 bloque.FilaPregunta = r;
-                var resp = Texto(ws.Cell(r, ColActividad)).ToLowerInvariant();
+                var resp = En(r, ColActividad).Texto.ToLowerInvariant();
                 if (resp is "sí" or "si") bloque.Tiene = true;
                 else if (resp == "no") bloque.Tiene = false;
                 else Agregar(res, new(hoja, r, "¿Tiene actividad?", $"{area.Nombre} ({TextoTipo(tipo)}): elegí Sí o No en ¿Tiene actividad? (primera fila del bloque)."));
@@ -373,7 +386,7 @@ public static class PlanillaExcel
             // Valores: ninguna celda vacía (si no hay valor, 0). Si el bloque es «No», se controla después que no haya valores.
             foreach (var c in entradas)
             {
-                var leida = Leer(ws.Cell(r, colDe[c.Codigo]));
+                var leida = En(r, colDe[c.Codigo]);
                 if (leida.Problema is not null) { Agregar(res, new(hoja, r, c.Nombre, $"{donde}: {leida.Problema}")); continue; }
                 if (leida.Vacia) { bloque.Plan.Valores.Add(new ValorLeido(anio, mes, c.Codigo, decimal.MinValue)); continue; }   // marcador de «vacía»; se resuelve al cerrar el bloque
                 if (!Numero(leida.Valor, out var valor)) { Agregar(res, new(hoja, r, c.Nombre, $"{donde}: \"{leida.Texto}\" no es un número. Usá solo números (decimales con coma).")); continue; }
@@ -451,10 +464,9 @@ public static class PlanillaExcel
         const string pegar = "Pegá solo valores, no fórmulas.";
         try
         {
+            // Solo se usa el valor que dejó guardado Excel. Nunca se calcula: las fórmulas a otra hoja u otro libro se resuelven mal (a veces dan 0, y un 0 de más no se ve)
+            // y arrancar el motor de cálculo de la librería tarda casi 10 segundos en una planilla grande.
             var v = c.CachedValue;
-            // Sin valor guardado (archivos hechos por herramientas que no calculan): solo se calcula una fórmula simple, que no toque otra hoja ni otro libro,
-            // porque esas se resuelven mal (a veces dan 0) y un 0 de más no se vería.
-            if (v.IsBlank && !(c.FormulaA1 ?? "").Contains('!') && !(c.FormulaA1 ?? "").Contains('[')) v = c.Value;
             if (v.IsError) return new(default, $"tiene una fórmula con error ({v.GetError()}). {pegar}");
             if (v.IsBlank) return new(default, $"tiene una fórmula sin valor calculado. {pegar}");
             return new(v, null);
@@ -465,10 +477,19 @@ public static class PlanillaExcel
 
     static string Texto(IXLCell c) => Leer(c).Texto;
 
-    static bool EntEro(IXLCell c, out int valor)
+    static readonly Leida SinContenido = new(default, null);
+
+    /// <summary>Una celda con contenido de la hoja; se lee (y, si tiene fórmula, se resuelve) recién la primera vez que se la pide.</summary>
+    sealed class Celda(IXLCell c)
+    {
+        Leida? leida;
+        public bool TieneFormula => c.HasFormula;
+        public Leida Lectura => leida ??= Leer(c);
+    }
+
+    static bool EntEro(Leida l, out int valor)
     {
         valor = 0;
-        var l = Leer(c);
         if (l.Problema is not null || l.Vacia) return false;
         if (l.Valor.IsNumber) { var d = l.Valor.GetNumber(); valor = (int)d; return d == Math.Floor(d) && d is > 0 and < 1_000_000_000; }
         return int.TryParse(l.Texto, NumberStyles.None, CultureInfo.InvariantCulture, out valor) && valor > 0;
