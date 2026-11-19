@@ -73,11 +73,12 @@ public static class PlanillaExcel
     // ============================ Generación ============================
 
     /// <param name="aniosAnuales">Cantidad de años anuales que se ofrecen después del primer año.</param>
-    public static byte[] Generar(Ciclo ciclo, string razonSocial, IReadOnlyList<AreaPlantilla> areas, int aniosAnuales = AniosAnualesPorDefecto)
+    /// <param name="cargadas">Última presentación de cada área (por código de área) para traer lo ya cargado: la planilla sirve para corregir y volver a importar. Null = planilla en blanco.</param>
+    public static byte[] Generar(Ciclo ciclo, string razonSocial, IReadOnlyList<AreaPlantilla> areas, int aniosAnuales = AniosAnualesPorDefecto, IReadOnlyDictionary<int, Presentacion>? cargadas = null)
     {
         using var wb = new XLWorkbook();
         Instrucciones(wb, ciclo, razonSocial, areas);
-        Hoja(wb, ciclo, areas, aniosAnuales);
+        Hoja(wb, ciclo, areas, aniosAnuales, cargadas);
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
         return ms.ToArray();
@@ -119,7 +120,7 @@ public static class PlanillaExcel
         for (int i = 1; i <= lineas.Count; i++) if (lineas[i - 1] is "CÓMO COMPLETAR ESTA PLANILLA" or "UNIDADES DE MEDIDA" or "ÁREAS INCLUIDAS EN ESTE ARCHIVO" || lineas[i - 1].StartsWith("CÓMO SE PASA")) ws.Cell(i, 1).Style.Font.Bold = true;
     }
 
-    static void Hoja(XLWorkbook wb, Ciclo ciclo, IReadOnlyList<AreaPlantilla> areas, int aniosAnuales)
+    static void Hoja(XLWorkbook wb, Ciclo ciclo, IReadOnlyList<AreaPlantilla> areas, int aniosAnuales, IReadOnlyDictionary<int, Presentacion>? cargadas)
     {
         var ws = wb.Worksheets.Add(NombreHoja);
         var cols = ExportadorExcel.ColumnasUnificadas();
@@ -186,6 +187,7 @@ public static class PlanillaExcel
                 celda.Style.Fill.BackgroundColor = pregunta; celda.Style.Protection.Locked = false;
                 celda.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; celda.Style.Font.Bold = true;
                 sino.Add(celda.Address.ToStringRelative());
+                if (cargadas is not null && cargadas.TryGetValue(a.IdBloque, out var presentacion)) RellenarConLoCargado(ws, presentacion, tipo, inicio, fin, cols);
 
                 for (int i = 0; i < cols.Count; i++)
                 {
@@ -231,6 +233,28 @@ public static class PlanillaExcel
         ws.SheetView.FreezeRows(4); ws.SheetView.FreezeColumns(ColActividad);
         // Protegida y sin permiso de dar formato: no se pueden mostrar la columna y la fila ocultas ni cambiar nada fuera de las celdas de carga.
         ws.Protect(ClaveProteccion, XLProtectionAlgorithm.Algorithm.SHA512, XLSheetProtectionElements.SelectEverything);
+    }
+
+    /// <summary>
+    /// Completa un bloque con lo que ya está cargado: «Sí» y los valores si el plan tiene datos; «No» si es un plan declarado sin actividad (todo en 0);
+    /// sin contestar si ese plan todavía no se cargó. Lo que se baja así se puede corregir y volver a importar tal cual.
+    /// </summary>
+    static void RellenarConLoCargado(IXLWorksheet ws, Presentacion p, TipoPlan tipo, int inicio, int fin, IReadOnlyList<CampoDef> cols)
+    {
+        var valores = p.Valores.Where(v => p.ActividadDe(v) == tipo && v.Valor.HasValue).ToList();
+        if (valores.Count == 0) return;
+        if (valores.All(v => v.Valor == 0)) { ws.Cell(inicio, ColActividad).Value = "No"; return; }
+        ws.Cell(inicio, ColActividad).Value = "Sí";
+        var porClave = valores.ToDictionary(v => (v.Anio, v.Mes, v.Campo), v => v.Valor!.Value);
+        for (int r = inicio; r <= fin; r++)
+        {
+            var anio = ws.Cell(r, ColAnio).GetValue<int>();
+            if (anio > p.AnioHasta) break;
+            var mes = ws.Cell(r, ColMes).GetString() == "Anual" ? 0 : ws.Cell(r, ColMes).GetValue<int>();
+            for (int i = 0; i < cols.Count; i++)
+                if (CatalogoCampos.Buscar(tipo, cols[i].Codigo) is { EsCalculado: false } def && porClave.TryGetValue((anio, mes, def.Codigo), out var v))
+                    ws.Cell(r, PrimeraColCampo + i).Value = (double)v;
+        }
     }
 
     /// <summary>Fórmula de un campo calculado: suma de sus componentes menos los que resta (los que no son columna se abren en sus componentes).</summary>

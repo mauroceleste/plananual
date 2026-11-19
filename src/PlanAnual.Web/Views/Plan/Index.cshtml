@@ -138,8 +138,13 @@
         <div class="panel section-gap">
             <div class="panel__head"><h2 class="panel__title">@Url.Icono("download") Cargar con Excel</h2></div>
             <p class="form-text">Descargá una única planilla con <strong>todas tus áreas</strong>, cada una con su bloque <strong>Convencional</strong> y su bloque <strong>No Convencional</strong>. En la primera fila de cada bloque elegí <em>¿Tiene actividad? Sí / No</em>: con «No» el sistema carga ceros y no tenés que completar nada más de ese bloque. El primer año (@(c?.Anio)) se informa mes por mes y los siguientes por año. En los bloques con «Sí» las celdas no pueden quedar vacías: si no hay valor, va 0. Si hay errores te decimos en qué fila y columna, y no se importa nada hasta corregirlos. También podés cargar a mano, área por área, con el botón <em>Comenzar</em> / <em>Continuar</em> (en el formulario elegís el plan Convencional o No Convencional).</p>
+            <p class="form-text"><strong>Para corregir o rectificar:</strong> bajá <em>la planilla con lo cargado</em>, modificá ahí lo que haga falta y volvé a importarla. Si el área ya fue enviada, primero tiene que estar rectificada (con la autorización de la Subsecretaría): la importación solo actúa sobre borradores.</p>
             <div class="d-flex flex-wrap gap-3 align-items-end">
                 <a class="btn btn-outline-secondary" asp-action="PlanillaExcel" asp-route-cuit="@Model.CuitAsistido">@Url.Icono("download") Descargar planilla Excel</a>
+                @if (Model.Filas.Any(f => f.Ultima is not null))
+                {
+                    <a class="btn btn-outline-secondary" asp-action="PlanillaExcel" asp-route-cuit="@Model.CuitAsistido" asp-route-cargado="true" title="La planilla con los valores que ya cargaste, para corregirlos y volver a importar">@Url.Icono("download") Descargar planilla con lo cargado</a>
+                }
                 @if (hayEditables)
                 {
                     <form asp-action="Importar" method="post" enctype="multipart/form-data" data-una-vez data-confirmar="Se carga lo del archivo como borrador y se reemplaza lo que ya cargaste en las áreas incluidas. ¿Continuar?" class="d-flex flex-wrap gap-2 align-items-end">

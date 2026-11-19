@@ -369,15 +369,15 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
     }
 
     [HttpGet("Plan/PlanillaExcel")]
-    public async Task<IActionResult> PlanillaExcel(string? cuit)
+    public async Task<IActionResult> PlanillaExcel(string? cuit, bool cargado = false)
     {
         try
         {
             var bloques = await AreasDeLaEmpresaAsync(cuit);
             if (bloques is null) return RedirectToAction(nameof(Index), new { cuit });
-            var bytes = await svc.PlantillaAsync(User.ToSesion(), bloques);
+            var bytes = await svc.PlantillaAsync(User.ToSesion(), bloques, cargado);
             var ciclo = await svc.CicloAbiertoAsync();
-            return File(bytes, TipoXlsx, $"Plan_{ciclo?.Anio}_planilla_de_carga.xlsx");
+            return File(bytes, TipoXlsx, $"Plan_{ciclo?.Anio}_{(cargado ? "planilla_con_lo_cargado" : "planilla_de_carga")}.xlsx");
         }
         catch (HttpRequestException) { TempData["Error"] = "No se pudo consultar Legajos de Áreas en este momento. Probá de nuevo en unos minutos."; }
         catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }

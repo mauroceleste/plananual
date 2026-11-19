@@ -397,14 +397,29 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
 
     public sealed record ResultadoImportacion(IReadOnlyList<ErrorImportacion> Errores, bool Truncado, IReadOnlyList<string> Areas);
 
-    /// <summary>Excel vacío con todas las áreas de la empresa: cada una con un bloque Convencional y uno No Convencional.</summary>
-    public async Task<byte[]> PlantillaAsync(UsuarioSesion u, IReadOnlyList<BloqueInfo> bloques)
+    /// <summary>
+    /// Excel con todas las áreas de la empresa: cada una con un bloque Convencional y uno No Convencional. En blanco, o con lo ya cargado
+    /// (<paramref name="conLoCargado"/>): la última versión de cada área, para corregirla y volver a importar (por ejemplo, en una rectificación).
+    /// </summary>
+    public async Task<byte[]> PlantillaAsync(UsuarioSesion u, IReadOnlyList<BloqueInfo> bloques, bool conLoCargado = false)
     {
         if (bloques.Count == 0) throw new OperacionInvalida("No hay áreas para armar la planilla.");
         if (bloques.Any(b => !u.PuedeEditar(b.Cuit))) throw new UnauthorizedAccessException();
         var ciclo = await CicloAbiertoAsync() ?? throw new OperacionInvalida("No hay una convocatoria abierta.");
         var areas = bloques.OrderBy(b => b.Nombre).Select(b => new AreaPlantilla(b.IdBloque, b.Nombre)).ToList();
-        return PlanillaExcel.Generar(ciclo, bloques[0].RazonSocial, areas);
+
+        Dictionary<int, Presentacion>? cargadas = null;
+        if (conLoCargado)
+        {
+            var cuits = bloques.Select(b => b.Cuit).Distinct().ToList();
+            var idsBloque = bloques.Select(b => b.IdBloque).ToHashSet();
+            var todas = await db.Presentaciones.AsNoTracking().Include(p => p.Valores)
+                .Where(p => p.CicloId == ciclo.Id && cuits.Contains(p.Cuit)).ToListAsync();
+            cargadas = todas.Where(p => idsBloque.Contains(p.IdBloque)).GroupBy(p => p.IdBloque)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.Version).First());
+            if (cargadas.Count == 0) throw new OperacionInvalida("Todavía no hay nada cargado para descargar. Bajá la planilla en blanco para empezar.");
+        }
+        return PlanillaExcel.Generar(ciclo, bloques[0].RazonSocial, areas, cargadas: cargadas);
     }
 
     /// <summary>
