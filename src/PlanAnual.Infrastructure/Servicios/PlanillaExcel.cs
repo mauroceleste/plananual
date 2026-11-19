@@ -292,20 +292,20 @@ public static class PlanillaExcel
     static void LeerHoja(IXLWorksheet ws, IReadOnlyDictionary<int, AreaPlantilla> permitidas, int anioCiclo, ResultadoLectura res)
     {
         var hoja = ws.Name;
-        if (ws.Cell(FilaCodigos, ColTipo).GetString().Trim() != CodigoTipo || ws.Cell(FilaCodigos, ColActividad).GetString().Trim() != CodigoActividad)
+        if (Texto(ws.Cell(FilaCodigos, ColTipo)) != CodigoTipo || Texto(ws.Cell(FilaCodigos, ColActividad)) != CodigoActividad)
         { Agregar(res, new(hoja, FilaCodigos, null, "Esta planilla es de una versión anterior (no tiene la columna «Tipo de Actividad»). Volvé a descargarla desde el sistema.")); return; }
 
         var ultimaCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
         var colDe = new Dictionary<string, int>();
         for (int c = PrimeraColCampo; c <= ultimaCol; c++)
-            if (ws.Cell(FilaCodigos, c).GetString().Trim() is { Length: > 0 } cod) colDe[cod] = c;
+            if (Texto(ws.Cell(FilaCodigos, c)) is { Length: > 0 } cod) colDe[cod] = c;
         var faltantes = CatalogoCampos.Todos.Where(c => !c.EsCalculado && !colDe.ContainsKey(c.Codigo)).GroupBy(c => c.Codigo).Select(g => g.First()).ToList();
         foreach (var c in faltantes) Agregar(res, new(hoja, FilaCodigos, null, $"Falta la columna \"{c.Nombre}\": no borres ni muevas columnas de la planilla."));
         if (faltantes.Count > 0) return;
 
         var ultimaFila = ws.LastRowUsed()?.RowNumber() ?? 0;
         var bloques = new Dictionary<(int, TipoPlan), Bloque>();
-        bool CeldaVacia(int r, int c) => ws.Cell(r, c).IsEmpty() || ws.Cell(r, c).GetString().Trim() == "";
+        bool CeldaVacia(int r, int c) => Leer(ws.Cell(r, c)).Vacia;
 
         for (int r = PrimeraFila; r <= ultimaFila; r++)
         {
@@ -314,12 +314,12 @@ public static class PlanillaExcel
 
             if (!EntEro(ws.Cell(r, ColCodigo), out var codigo)) { Agregar(res, new(hoja, r, "Código de área", "Falta el código de área (columna oculta B). No la borres.")); continue; }
             if (!permitidas.TryGetValue(codigo, out var area)) { Agregar(res, new(hoja, r, "Código de área", $"El código {codigo} no corresponde a ninguna de las áreas de tu empresa.")); continue; }
-            if (TipoDeTexto(ws.Cell(r, ColTipo).GetString()) is not { } tipo) { Agregar(res, new(hoja, r, "Tipo de Actividad", $"{area.Nombre}: el tipo de actividad tiene que ser «Convencional» o «No Convencional». No lo modifiques.")); continue; }
+            if (TipoDeTexto(Texto(ws.Cell(r, ColTipo))) is not { } tipo) { Agregar(res, new(hoja, r, "Tipo de Actividad", $"{area.Nombre}: el tipo de actividad tiene que ser «Convencional» o «No Convencional». No lo modifiques.")); continue; }
 
             // Período
             if (!EntEro(ws.Cell(r, ColAnio), out var anio)) { Agregar(res, new(hoja, r, "Año", $"{area.Nombre}: el año no es un número.")); continue; }
             int mes;
-            var mesTxt = ws.Cell(r, ColMes).GetString().Trim();
+            var mesTxt = Texto(ws.Cell(r, ColMes));
             if (mesTxt == "" || mesTxt.Equals("Anual", StringComparison.OrdinalIgnoreCase)) mes = 0;
             else if (!EntEro(ws.Cell(r, ColMes), out mes) || mes is < 1 or > 12) { Agregar(res, new(hoja, r, "Mes", $"{area.Nombre} {anio}: el mes tiene que ser un número de 1 a 12.")); continue; }
             if (anio < anioCiclo) { Agregar(res, new(hoja, r, "Año", $"{area.Nombre}: el plan empieza en {anioCiclo}; {anio} no corresponde.")); continue; }
@@ -336,7 +336,7 @@ public static class PlanillaExcel
             if (anio == anioCiclo && mes == 1)
             {
                 bloque.FilaPregunta = r;
-                var resp = ws.Cell(r, ColActividad).GetString().Trim().ToLowerInvariant();
+                var resp = Texto(ws.Cell(r, ColActividad)).ToLowerInvariant();
                 if (resp is "sí" or "si") bloque.Tiene = true;
                 else if (resp == "no") bloque.Tiene = false;
                 else Agregar(res, new(hoja, r, "¿Tiene actividad?", $"{area.Nombre} ({TextoTipo(tipo)}): elegí Sí o No en ¿Tiene actividad? (primera fila del bloque)."));
@@ -349,9 +349,10 @@ public static class PlanillaExcel
             // Valores: ninguna celda vacía (si no hay valor, 0). Si el bloque es «No», se controla después que no haya valores.
             foreach (var c in entradas)
             {
-                var celda = ws.Cell(r, colDe[c.Codigo]);
-                if (CeldaVacia(r, colDe[c.Codigo])) { bloque.Plan.Valores.Add(new ValorLeido(anio, mes, c.Codigo, decimal.MinValue)); continue; }   // marcador de «vacía»; se resuelve al cerrar el bloque
-                if (!Numero(celda, out var valor)) { Agregar(res, new(hoja, r, c.Nombre, $"{donde}: \"{celda.GetString().Trim()}\" no es un número. Usá solo números (decimales con coma).")); continue; }
+                var leida = Leer(ws.Cell(r, colDe[c.Codigo]));
+                if (leida.Problema is not null) { Agregar(res, new(hoja, r, c.Nombre, $"{donde}: {leida.Problema}")); continue; }
+                if (leida.Vacia) { bloque.Plan.Valores.Add(new ValorLeido(anio, mes, c.Codigo, decimal.MinValue)); continue; }   // marcador de «vacía»; se resuelve al cerrar el bloque
+                if (!Numero(leida.Valor, out var valor)) { Agregar(res, new(hoja, r, c.Nombre, $"{donde}: \"{leida.Texto}\" no es un número. Usá solo números (decimales con coma).")); continue; }
                 if (ReglasDeDatos.Motivo(c, valor) is { } motivo) { Agregar(res, new(hoja, r, c.Nombre, $"{donde}: {motivo}")); continue; }
                 bloque.Plan.Valores.Add(new ValorLeido(anio, mes, c.Codigo, valor));
             }
@@ -409,25 +410,58 @@ public static class PlanillaExcel
 
     static string Periodo(int anio, int mes) => mes > 0 ? $"{Validador.Meses[mes - 1]} {anio}" : anio.ToString();
 
+    /// <summary>
+    /// Lo que hay en una celda, SIN recalcular fórmulas: si tiene una, se toma el valor que Excel dejó guardado. Recalcular puede fallar
+    /// (fórmulas a otra hoja que no está, a otro libro, con error): en vez de romper la importación, se informa en esa celda.
+    /// </summary>
+    sealed record Leida(XLCellValue Valor, string? Problema)
+    {
+        /// <summary>Sin nada para importar (una fórmula con problemas no cuenta como vacía: se informa).</summary>
+        public bool Vacia => Problema is null && (Valor.IsBlank || (Valor.IsText && Valor.GetText().Trim() == ""));
+        public string Texto => Valor.IsBlank ? "" : Valor.IsText ? Valor.GetText().Trim() : Valor.ToString(CultureInfo.InvariantCulture).Trim();
+    }
+
+    static Leida Leer(IXLCell c)
+    {
+        if (!c.HasFormula) return new(c.Value, null);
+        const string pegar = "Pegá solo valores, no fórmulas.";
+        try
+        {
+            var v = c.CachedValue;
+            // Sin valor guardado (archivos hechos por herramientas que no calculan): solo se calcula una fórmula simple, que no toque otra hoja ni otro libro,
+            // porque esas se resuelven mal (a veces dan 0) y un 0 de más no se vería.
+            if (v.IsBlank && !(c.FormulaA1 ?? "").Contains('!') && !(c.FormulaA1 ?? "").Contains('[')) v = c.Value;
+            if (v.IsError) return new(default, $"tiene una fórmula con error ({v.GetError()}). {pegar}");
+            if (v.IsBlank) return new(default, $"tiene una fórmula sin valor calculado. {pegar}");
+            return new(v, null);
+        }
+        catch (Exception) { return new(default, $"tiene una fórmula que no se pudo leer. {pegar}"); }
+    }
+
+
+    static string Texto(IXLCell c) => Leer(c).Texto;
+
     static bool EntEro(IXLCell c, out int valor)
     {
         valor = 0;
-        if (c.IsEmpty()) return false;
-        if (c.DataType == XLDataType.Number) { var d = c.GetDouble(); valor = (int)d; return d == Math.Floor(d) && d is > 0 and < 1_000_000_000; }
-        return int.TryParse(c.GetString().Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out valor) && valor > 0;
+        var l = Leer(c);
+        if (l.Problema is not null || l.Vacia) return false;
+        if (l.Valor.IsNumber) { var d = l.Valor.GetNumber(); valor = (int)d; return d == Math.Floor(d) && d is > 0 and < 1_000_000_000; }
+        return int.TryParse(l.Texto, NumberStyles.None, CultureInfo.InvariantCulture, out valor) && valor > 0;
     }
 
     /// <summary>Número de una celda: numérico de Excel, o texto en convención es-AR ("1.234,5", "12,5").</summary>
-    static bool Numero(IXLCell c, out decimal valor)
+    static bool Numero(XLCellValue v, out decimal valor)
     {
         valor = 0;
-        if (c.DataType == XLDataType.Number)
+        if (v.IsNumber)
         {
-            var d = c.GetDouble();
+            var d = v.GetNumber();
             if (double.IsNaN(d) || double.IsInfinity(d) || Math.Abs(d) > 1e12) return false;
             return decimal.TryParse(d.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out valor);
         }
-        var t = Regex.Replace(c.GetString(), @"\s", "");
+        if (!v.IsText) return false;     // fecha, lógico, error…
+        var t = Regex.Replace(v.GetText(), @"\s", "");
         if (t.Contains(',')) t = t.Replace(".", "").Replace(',', '.');
         else if (Regex.IsMatch(t, @"^[1-9]\d{0,2}(\.\d{3})+$")) t = t.Replace(".", "");
         return Regex.IsMatch(t, @"^\d+(\.\d+)?$") && decimal.TryParse(t, NumberStyles.Number, CultureInfo.InvariantCulture, out valor);
