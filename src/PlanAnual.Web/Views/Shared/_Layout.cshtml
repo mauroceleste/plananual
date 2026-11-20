@@ -5,6 +5,9 @@
     var seccion = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var accion = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
     string Activo(bool b) => b ? " is-active" : "";
+    // Introducción animada: una vez por sesión, en la primera pantalla a la que se llega al entrar (el script pone la cookie de sesión). ?intro=1 la repite, ?intro=0 la omite.
+    var introQ = Context.Request.Query["intro"].ToString();
+    var verIntro = auth && (seccion == "Plan" || seccion == "Tablero") && accion == "Index" && (introQ == "1" || (introQ != "0" && !Context.Request.Cookies.ContainsKey("plananual_intro")));
 }
 <!DOCTYPE html>
 <html lang="es" data-bs-theme="light">
@@ -26,6 +29,7 @@
     @if (auth) { <meta name="csrf" content="@(((Microsoft.AspNetCore.Antiforgery.IAntiforgery)Context.RequestServices.GetService(typeof(Microsoft.AspNetCore.Antiforgery.IAntiforgery))!).GetAndStoreTokens(Context).RequestToken)" /> }
 </head>
 <body>
+    @if (verIntro) { @await Component.InvokeAsync("Intro") }
     <a class="skip-link" href="#contenido">Saltar al contenido</a>
 @if (auth)
 {
@@ -83,7 +87,7 @@
                     <span class="avatar" aria-hidden="true">@Formato.Iniciales(u.Nombre.Replace("Usuario de prueba", "UP"))</span>
                     <span class="user-chip__text"><span class="user-chip__name">@u.Nombre</span><span class="user-chip__role">@u.Rol</span></span>
                 </div>
-                <a class="icon-btn" asp-controller="Introduccion" asp-action="Index" title="Ver introducción al sistema" aria-label="Ver introducción al sistema">@Url.Icono("sparkles")</a>
+                <a class="icon-btn" href="@Url.Content("~/")?intro=1" title="Ver la introducción de nuevo" aria-label="Ver la introducción de nuevo">@Url.Icono("sparkles")</a>
                 <form asp-controller="Account" asp-action="Logout" method="post" class="m-0"><button class="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión">@Url.Icono("logout")</button></form>
             </div>
         </div>

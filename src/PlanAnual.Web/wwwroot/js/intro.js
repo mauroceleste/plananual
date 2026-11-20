@@ -1,280 +1,221 @@
-/* Introducción animada al sistema (72 s). Un reloj maestro (T, en segundos) dibuja todo: cada escena es una función del tiempo,
-   por eso se puede pausar, repetir y saltar a cualquier punto. Sin librerías. Las cifras son ilustrativas. */
+/* Introducción animada de Plan Anual de Inversiones, en tres tiempos (~11 s). Misma receta que la de Legajo de Áreas:
+     A. La economía se dibuja: barras de inversión (Convencional y CENCH) suben año a año, la curva de producción corre por encima y la cámara se aleja.
+     B. Las palabras del sistema: INVERSIONES · PRODUCCIÓN · PLANES · DECISIONES.
+     C. El cierre: logo, título y cifras (empresas, áreas y convocatoria).
+   Se ve una vez por sesión (cookie de sesión "plananual_intro"; el layout solo dibuja #intro cuando corresponde). ?intro=1 la repite, ?intro=0 la omite.
+   Se puede saltar con el botón o con Escape. Quien tiene activada la opción "reducir movimiento" no la ve (salvo ?intro=1).
+   Las barras y la curva son ilustrativas: no usan datos de ninguna empresa. Revisión cuadro a cuadro: ?intro=1&introT=3.5 */
 (function () {
     'use strict';
-    var NS = 'http://www.w3.org/2000/svg', W = 1280, H = 720;
-    var svg = document.getElementById('stage'), root = document.getElementById('intro');
-    var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) && !/[?&]movimiento=1/.test(location.search);   // ?movimiento=1 fuerza la animación completa
-    var C = { noche: '#00212e', linea: '#2f6f86', conv: '#F8C60A', cench: '#00ADB5', coral: '#F26054', ok: '#87B867', tinta: '#eaf3f6', tenue: '#8fb0bd', petroleo: '#00374C' };
+    var root = document.getElementById('intro');
+    if (!root) return;
 
-    // ---------- utilidades ----------
-    function E(tag, attrs, parent) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
-    function TX(parent, x, y, str, cls, attrs) { var a = { x: x, y: y, 'class': cls }; if (attrs) for (var k in attrs) a[k] = attrs[k]; var t = E('text', a, parent); t.textContent = str; return t; }
-    function clamp(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
-    function seg(t, a, b) { return clamp((t - a) / (b - a)); }
-    function lerp(a, b, t) { return a + (b - a) * t; }
-    function out(t) { return 1 - Math.pow(1 - t, 3); }
-    function inout(t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-    function back(t) { var c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
-    function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-    function op(e, o) { e.setAttribute('opacity', o.toFixed(3)); }
-    function rise(e, p, dy) { e.setAttribute('opacity', p.toFixed(3)); e.setAttribute('transform', 'translate(0,' + ((1 - p) * (dy || 18)).toFixed(2) + ')'); }
-    function draw(path, p) { path.setAttribute('stroke-dashoffset', (1 - p).toFixed(4)); }
-    function dashed(path) { path.setAttribute('pathLength', '1'); path.setAttribute('stroke-dasharray', '1 1'); path.setAttribute('stroke-dashoffset', '1'); }
-    function head(g, title, sub) {
-        var a = TX(g, 80, 130, title, 't-head'), b = TX(g, 80, 168, sub, 't-sub');
-        return function (t) { rise(a, out(seg(t, .25, 1.0))); rise(b, out(seg(t, .6, 1.4))); };
+    var NS = 'http://www.w3.org/2000/svg';
+    var html = document.documentElement;
+    var q = new URLSearchParams(location.search);
+
+    function marcarVista() {
+        try { document.cookie = 'plananual_intro=1; path=' + (root.getAttribute('data-cookie-path') || '/') + '; SameSite=Lax'; } catch (e) { /* sin cookies: se vuelve a ver, no pasa nada */ }
+    }
+    function quitar() { html.classList.remove('intro-activa'); if (root.parentNode) root.parentNode.removeChild(root); }
+    function desvanecer(ms) {
+        if (!root.animate) { quitar(); return; }
+        var a = root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-in', fill: 'forwards' });
+        a.onfinish = quitar;
     }
 
-    // ---------- fondo permanente: curvas de nivel (cuenca) y encabezado ----------
-    var defs = E('defs', {}, svg);
-    var bg = E('g', {}, svg), contours = [];
-    for (var i = 0; i < 17; i++) {
-        var d = '', y0 = 90 + i * 38;
-        for (var x = -60; x <= W + 60; x += 40) { var y = y0 + Math.sin(x * .0058 + i * .55) * 20 + Math.sin(x * .0131 + i * 1.3) * 9; d += (x === -60 ? 'M' : 'L') + x + ' ' + y.toFixed(1) + ' '; }
-        contours.push(E('path', { d: d, fill: 'none', stroke: C.linea, 'stroke-width': 1.2 }, bg));
-    }
-    var hdr = E('g', {}, svg);
-    E('rect', { x: 80, y: 0, width: 64, height: 14, fill: C.coral }, hdr);
-    TX(hdr, 80, 50, 'PLAN ANUAL DE INVERSIONES', 't-kicker');
-    var kicker = TX(hdr, 1200, 50, '', 't-kicker', { 'text-anchor': 'end' });
+    marcarVista();                                    // se marca al empezar: si recarga a mitad de camino, no se repite
+    var forzada = q.get('intro') === '1';
+    if (!('animate' in Element.prototype) || (!forzada && matchMedia('(prefers-reduced-motion: reduce)').matches)) { quitar(); return; }
+    html.classList.add('intro-activa');
+    root.focus();
 
-    // ---------- escenas ----------
-    var scenes = [];
+    var CIFRAS = {
+        empresas: parseInt(root.getAttribute('data-empresas'), 10) || 0,
+        areas: parseInt(root.getAttribute('data-areas'), 10) || 0,
+        anio: parseInt(root.getAttribute('data-anio'), 10) || new Date().getFullYear()
+    };
+    var semilla = 7;                                  // azar repetible: la animación se ve siempre igual
+    function azar() { semilla = (semilla * 16807) % 2147483647; return semilla / 2147483647; }
+    function el(nombre, attrs, padre) { var e = document.createElementNS(NS, nombre); for (var k in attrs) e.setAttribute(k, attrs[k]); if (padre) padre.appendChild(e); return e; }
+    var anims = [];
+    function anima(nodo, frames, opc) { var a = nodo.animate(frames, Object.assign({ fill: 'both' }, opc)); anims.push(a); return a; }
+    function $(sel) { return root.querySelector(sel); }
+    function todos(sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
 
-    // 1 · Apertura
-    scenes.push({ dur: 8, kicker: '01 · APERTURA', cap: 'Cada año, las operadoras de Neuquén planifican sus inversiones. Este sistema las reúne en un solo lugar.', build: function (g) {
-        var r = rng(11), dots = [];
-        var prod = E('path', { d: 'M80 440 C 260 430, 330 392, 470 372 S 700 312, 820 262 S 1050 200, 1200 178', fill: 'none', stroke: C.coral, 'stroke-width': 5, 'stroke-linecap': 'round' }, g); dashed(prod);
-        for (var i = 0; i < 15; i++) {
-            var x = 190 + r() * 930, y = 215 + r() * 250;
-            var ring = E('circle', { cx: x, cy: y, r: 6, fill: 'none', stroke: i % 3 === 0 ? C.cench : C.conv, 'stroke-width': 1.5 }, g);
-            var dot = E('circle', { cx: x, cy: y, r: 0, fill: i % 3 === 0 ? C.cench : C.conv }, g);
-            dots.push([dot, ring]);
-        }
-        var t1 = TX(g, 80, 590, 'Plan Anual de Inversiones', 't-title'), t2 = TX(g, 80, 640, 'Del dato a la decisión', 't-sub', { fill: C.conv, style: 'font-size:30px;fill:#F8C60A' });
-        return function (t) {
-            draw(prod, out(seg(t, 1.4, 5)));
-            for (var i = 0; i < dots.length; i++) {
-                var p = seg(t, .5 + i * .11, .9 + i * .11), f = (t * 1.1 + i * .37) % 1;
-                dots[i][0].setAttribute('r', (5 * back(p)).toFixed(2));
-                dots[i][1].setAttribute('r', (6 + f * 24).toFixed(2)); op(dots[i][1], p * (1 - f) * .55);
-            }
-            rise(t1, out(seg(t, 3, 4.2)), 26); rise(t2, out(seg(t, 4.5, 5.5)));
-        };
-    } });
+    // ---------------------------------------------------------------- línea de tiempo (ms)
+    var T_C = 4300, PASO_C = 470, DUR_C = 4 * PASO_C;     // B: palabras (1,9 s)
+    var T_TEXTO = T_C + DUR_C;                            // C: cierre
+    var FIN = T_TEXTO + 4800;                             // ≈ 11,1 s (+ 0,7 s de desvanecido)
+    var T_DIM = T_C - 500;                                // desde cuándo el gráfico queda de fondo, atenuado
 
-    // 2 · Un solo registro
-    scenes.push({ dur: 8, kicker: '02 · UN SOLO REGISTRO', cap: 'Se acabaron las planillas sueltas, los mails perdidos y las versiones cruzadas: todo vive en un único registro.', build: function (g) {
-        var r = rng(5), kinds = [['XLS', '#3a9d6a'], ['NOTA', C.conv], ['MAIL', '#6f9bf2'], ['PDF', '#e0574d']], papers = [];
-        var hA = TX(g, 80, 130, 'Planillas, mails, notas…', 't-head'), sA = TX(g, 80, 168, 'La información, repartida en cualquier lado', 't-sub');
-        var hB = TX(g, 80, 130, 'Un solo registro', 't-head'), sB = TX(g, 80, 168, 'Cada dato, en su lugar y con su historia', 't-sub');
-        for (var i = 0; i < 18; i++) {
-            var k = kinds[i % 4], pg = E('g', {}, g);
-            E('rect', { x: -55, y: -40, width: 110, height: 80, rx: 7, fill: '#0a4560', stroke: '#3d7f97', 'stroke-width': 1.3 }, pg);
-            E('rect', { x: -55, y: -40, width: 44, height: 18, rx: 4, fill: k[1] }, pg);
-            TX(pg, -33, -27, k[0], 't-small', { 'text-anchor': 'middle', style: 'font-size:11px;fill:#00212e' });
-            for (var j = 0; j < 3; j++) E('rect', { x: -44, y: -10 + j * 16, width: 88 - j * 22, height: 5, rx: 2.5, fill: '#2f6f86' }, pg);
-            var ok = E('circle', { cx: 46, cy: 32, r: 7, fill: C.ok }, pg);
-            papers.push({ g: pg, ok: ok, sx: 90 + r() * 1100, sy: 220 + r() * 330, rot: (r() - .5) * 56, ex: 155 + (i % 6) * 162 + 75, ey: 255 + Math.floor(i / 6) * 124 + 20, ph: r() * 6 });
-        }
-        return function (t) {
-            var hh = inout(seg(t, 2.7, 3.7));
-            rise(hA, out(seg(t, .25, 1)) * (1 - hh)); rise(sA, out(seg(t, .6, 1.4)) * (1 - hh));
-            rise(hB, hh); rise(sB, seg(t, 3.2, 4.2));
-            for (var i = 0; i < papers.length; i++) {
-                var p = papers[i], m = inout(seg(t, 2 + i * .07, 4.4 + i * .04)), a = out(seg(t, 0 + i * .04, .6 + i * .04));
-                var x = lerp(p.sx, p.ex, m), y = lerp(p.sy, p.ey, m) + Math.sin(t * 1.6 + p.ph) * 7 * (1 - m);
-                p.g.setAttribute('transform', 'translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ') rotate(' + (p.rot * (1 - m)).toFixed(1) + ') scale(' + (.9 + .1 * m).toFixed(3) + ')');
-                op(p.g, a); op(p.ok, seg(t, 4.8 + i * .06, 5.2 + i * .06)); p.ok.setAttribute('r', (7 * back(seg(t, 4.8 + i * .06, 5.3 + i * .06))).toFixed(2));
-            }
-        };
-    } });
+    // ---------------------------------------------------------------- composición según la pantalla
+    var lienzo = $('.intro__lienzo');
+    var W = root.clientWidth, H = root.clientHeight;
+    lienzo.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    var CW = 1600, CH = 900;                              // "plano" del gráfico (unidades propias)
+    var apaisado = W / H > 1.2;
+    var s1 = apaisado ? Math.min((H * 0.74) / CH, (W * 0.53) / CW) : Math.min((H * 0.40) / CH, (W * 0.92) / CW);
+    var fin = apaisado ? { x: W * 0.725 - (CW * s1) / 2, y: (H - CH * s1) / 2 } : { x: (W - CW * s1) / 2, y: H * 0.09 };
+    var foco = { x: CW * 0.60, y: CH * 0.55 };            // donde la cámara arranca: el tramo de mayor inversión
+    var s0 = s1 * 2.6;
+    var ini = { x: W * 0.5 - foco.x * s0, y: H * 0.5 - foco.y * s0 };
+    function mat(p, s) { return 'translate(' + p.x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px) scale(' + s.toFixed(4) + ')'; }
+    var camara = $('.intro__camara');
+    camara.style.transformOrigin = '0 0';
 
-    // 3 · La carga
-    scenes.push({ dur: 12, kicker: '03 · LA CARGA', cap: 'Cada área carga su plan: Convencional, No Convencional o ambos. El primer año mes a mes; después, año a año.', build: function (g) {
-        var hd = head(g, 'Cada área, su plan', 'Convencional y No Convencional, mes a mes y año a año');
-        var r = rng(21), panels = [], cols = ['Inversión', 'Pozos', 'Petróleo', 'Gas'], rows = ['Ene', 'Feb', 'Mar', 'Abr', 'May', '…', 'Dic'];
-        [['Plan Convencional', C.conv, 80, 1.2], ['Plan No Convencional (CENCH)', C.cench, 660, 3.6]].forEach(function (pn) {
-            var pg = E('g', {}, g), x0 = pn[2], y0 = 215, cells = [];
-            var ttl = TX(pg, x0, y0, pn[0], 't-small', { style: 'font-size:20px;font-weight:800', fill: pn[1] }); ttl.style.fill = pn[1];
-            var rl = [];
-            cols.forEach(function (c, ci) { var h = TX(pg, x0 + 70 + ci * 117 + 58, y0 + 36, c, 't-axis', { 'text-anchor': 'middle' }); rl.push(h); });
-            rows.forEach(function (rw, ri) { var l = TX(pg, x0 + 8, y0 + 82 + ri * 42, rw, 't-axis'); rl.push(l); });
-            for (var ri = 0; ri < rows.length; ri++) for (var ci = 0; ci < 4; ci++) {
-                var cg = E('g', {}, pg), cx = x0 + 70 + ci * 117, cy = y0 + 52 + ri * 42;
-                E('rect', { x: cx + 3, y: cy + 3, width: 111, height: 36, rx: 5, fill: pn[1], 'fill-opacity': .13, stroke: pn[1], 'stroke-opacity': .45 }, cg);
-                TX(cg, cx + 58, cy + 27, ri === 5 ? '⋯' : (ci === 1 ? String(Math.round(r() * 9 + 1)) : (r() * 90 + 10).toFixed(1)), 't-cell', { 'text-anchor': 'middle' });
-                cells.push(cg);
-            }
-            panels.push({ g: pg, cells: cells, ttl: ttl, rl: rl, t0: pn[3] });
-        });
-        var chip = E('g', {}, g);
-        E('rect', { x: 340, y: 578, width: 600, height: 38, rx: 20, fill: 'rgba(255,255,255,.08)', stroke: '#2f6f86' }, chip);
-        TX(chip, 640, 603, 'Formulario o Excel · se valida mientras se carga', 't-small', { 'text-anchor': 'middle', style: 'font-size:16px' });
-        return function (t) {
-            hd(t);
-            panels.forEach(function (p) {
-                rise(p.ttl, out(seg(t, p.t0 - .5, p.t0 + .2)), 12); p.rl.forEach(function (l) { op(l, seg(t, p.t0 - .2, p.t0 + .6)); });
-                p.cells.forEach(function (c, i) { var a = out(seg(t, p.t0 + .3 + i * .1, p.t0 + .6 + i * .1)); op(c, a); });
-            });
-            rise(chip, out(seg(t, 9, 10)), 14);
-        };
-    } });
+    // ================================================================ A. LA ECONOMÍA SE DIBUJA
+    var gr = $('.intro__graticula');
+    for (var gy = -500; gy <= 1500; gy += 90) el('line', { x1: -1500, x2: 3200, y1: gy, y2: gy, stroke: 'rgba(252,242,220,.055)', 'stroke-width': .7 }, gr);
+    for (var gx = -1500; gx <= 3200; gx += 80) el('line', { y1: -500, y2: 1500, x1: gx, x2: gx, stroke: 'rgba(252,242,220,.055)', 'stroke-width': .7 }, gr);
+    anima(gr, [{ opacity: 0 }, { opacity: 1 }], { duration: 1600, delay: 200 });
 
-    // 4 · Enviar con garantías
-    scenes.push({ dur: 9, kicker: '04 · ENVIAR CON GARANTÍAS', cap: 'Antes de enviar, el sistema valida los datos. Al enviar, entrega un comprobante con una huella que prueba que nada cambió.', build: function (g) {
-        var hd = head(g, 'Enviar con garantías', 'Validación automática y un comprobante inalterable');
-        E('rect', { x: 100, y: 205, width: 640, height: 345, rx: 18, fill: 'rgba(255,255,255,.05)', stroke: '#2f6f86' }, g);
-        var items = ['Datos validados', 'Anexos completos', 'Dentro del plazo'], checks = [];
-        items.forEach(function (s, i) {
-            var y = 262 + i * 56;
-            E('circle', { cx: 150, cy: y, r: 16, fill: 'none', stroke: '#2f6f86', 'stroke-width': 2 }, g);
-            var fill = E('circle', { cx: 150, cy: y, r: 16, fill: C.ok }, g);
-            var ck = E('path', { d: 'M-7 0 L-2 6 L8 -6', transform: 'translate(150,' + y + ')', fill: 'none', stroke: '#00212e', 'stroke-width': 3.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g); dashed(ck);
-            var tx = TX(g, 184, y + 7, s, 't-head', { style: 'font-size:23px;font-family:Manrope,sans-serif;font-weight:700' });
-            checks.push([fill, ck, tx]);
-        });
-        E('line', { x1: 130, y1: 420, x2: 710, y2: 420, stroke: '#2f6f86', 'stroke-width': 1 }, g);
-        TX(g, 130, 452, 'COMPROBANTE', 't-kicker', { style: 'font-size:12px' });
-        var code = TX(g, 130, 488, '', 't-mono', { style: 'font-size:30px;fill:#F8C60A' });
-        var hash = TX(g, 130, 526, '', 't-mono', { style: 'font-size:17px;fill:#8fb0bd' });
-        var seal = E('g', {}, g);
-        E('circle', { cx: 0, cy: 0, r: 96, fill: 'none', stroke: C.coral, 'stroke-width': 6 }, seal);
-        E('circle', { cx: 0, cy: 0, r: 82, fill: 'none', stroke: C.coral, 'stroke-width': 1.6 }, seal);
-        TX(seal, 0, 10, 'ENVIADO', 't-head', { 'text-anchor': 'middle', style: 'font-size:36px;fill:#F26054' });
-        TX(seal, 0, 40, 'PLAN 2027 · v1', 't-small', { 'text-anchor': 'middle', style: 'font-size:14px;fill:#F26054;letter-spacing:.12em' });
-        var CODE = 'PAI-2027-000123-v1', FIN = '9F2C·7A1E·5B03·D8C4·…·E41A', HEX = '0123456789ABCDEF', rr = rng(3);
-        return function (t) {
-            hd(t);
-            checks.forEach(function (c, i) { var p = seg(t, 1 + i * 1.2, 1.5 + i * 1.2); c[0].setAttribute('r', (16 * back(p)).toFixed(2)); draw(c[1], seg(t, 1.2 + i * 1.2, 1.7 + i * 1.2)); op(c[2], .45 + .55 * p); });
-            var s = out(seg(t, 4.6, 5.3)); seal.setAttribute('transform', 'translate(990,380) rotate(-12) scale(' + lerp(2, 1, s).toFixed(3) + ')'); op(seal, s);
-            code.textContent = CODE.slice(0, Math.floor(seg(t, 5.6, 7) * CODE.length));
-            var n = seg(t, 6.6, 8.2) * FIN.length, hs = '';
-            for (var i = 0; i < FIN.length; i++) hs += (t < 6.6 ? ' ' : (i < n ? FIN[i] : (FIN[i] === '·' || FIN[i] === '…' ? FIN[i] : HEX[Math.floor(rr() * 16)])));
-            hash.textContent = t < 6.6 ? '' : 'SHA-256  ' + hs;
-        };
-    } });
+    var BASE = 790, K = 0.62;                              // línea de base y escala de las barras
+    var conv = [300, 340, 360, 340, 310, 270, 235, 205, 180], cen = [110, 200, 310, 390, 430, 425, 400, 370, 340];
+    var prod = [28, 40, 58, 78, 94, 104, 108, 110, 109];
+    var gB = $('.intro__barras'), gC = $('.intro__curva'), gF = $('.intro__flujo'), gN = $('.intro__notas');
+    var BARRIDO_INI = 600, BARRIDO = 2500;                 // ms: cuándo empieza y cuánto dura el barrido oeste → este
+    var CONVC = 'rgba(248,198,10,', CENC = 'rgba(0,173,181,';
 
-    // 5 · Línea de tiempo
-    scenes.push({ dur: 10, kicker: '05 · EL DIÁLOGO', cap: 'Notas, respuestas, prórrogas y decisiones de la Subsecretaría quedan registradas en una línea de tiempo.', build: function (g) {
-        var hd = head(g, 'Cada movimiento, registrado', 'Notas, respuestas, prórrogas y decisiones en una sola línea de tiempo');
-        var line = E('line', { x1: 100, y1: 390, x2: 1180, y2: 390, stroke: C.linea, 'stroke-width': 3, 'stroke-linecap': 'round' }, g); dashed(line);
-        var data = [['Nota con plazo', 'Subsecretaría · 10/11', C.conv], ['Respuesta', 'Empresa · 13/11', C.cench], ['Prórroga solicitada', 'Empresa · 14/11', C.coral], ['Prórroga otorgada', 'Nuevo plazo · 05/04', C.ok], ['Plan aprobado', 'Decisión · 19/11', '#ffffff']], nodes = [];
-        data.forEach(function (d, i) {
-            var x = 170 + i * 235, up = i % 2 === 0, ng = E('g', {}, g);
-            E('line', { x1: x, y1: 390, x2: x, y2: up ? 318 : 462, stroke: d[2], 'stroke-width': 2, 'stroke-opacity': .6 }, ng);
-            var c = E('circle', { cx: x, cy: 390, r: 15, fill: C.noche, stroke: d[2], 'stroke-width': 4 }, ng);
-            var inner = E('circle', { cx: x, cy: 390, r: 6, fill: d[2] }, ng);
-            var lb = E('g', {}, ng);
-            TX(lb, x, up ? 292 : 498, d[0], 't-head', { 'text-anchor': 'middle', style: 'font-size:23px;font-family:Manrope,sans-serif;font-weight:800' });
-            TX(lb, x, up ? 316 : 524, d[1], 't-axis', { 'text-anchor': 'middle', style: 'font-size:15px' });
-            nodes.push({ g: ng, c: c, inner: inner, lb: lb });
-        });
-        return function (t) {
-            hd(t); draw(line, out(seg(t, 1, 3)));
-            nodes.forEach(function (n, i) { var p = seg(t, 1.8 + i * 1.3, 2.4 + i * 1.3); op(n.g, p); n.c.setAttribute('r', (15 * back(p)).toFixed(2)); n.inner.setAttribute('r', (6 * back(p)).toFixed(2)); rise(n.lb, out(seg(t, 2 + i * 1.3, 2.8 + i * 1.3)), 10); });
-        };
-    } });
-
-    // 6 · El tablero
-    scenes.push({ dur: 14, kicker: '06 · EL TABLERO', cap: 'Con los planes enviados, el tablero muestra la inversión, la producción y las alertas para decidir con información.', build: function (g) {
-        var hd = head(g, 'La inversión, a la vista', 'Tablero de la Subsecretaría · datos ilustrativos');
-        var years = [2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034], conv = [320, 360, 380, 360, 330, 290, 250, 220], cen = [120, 220, 340, 420, 450, 440, 420, 390];
-        var prodv = [30, 44, 62, 82, 98, 108, 112, 114], base = 612, top = 262, max = 900, sc = (base - top) / max;
-        TX(g, 120, 236, 'INVERSIÓN PROYECTADA POR AÑO, MMUSD', 't-kicker', { style: 'font-size:13px' });
-        [0, 300, 600, 900].forEach(function (v) { var y = base - v * sc; E('line', { x1: 120, y1: y, x2: 1160, y2: y, stroke: '#2f6f86', 'stroke-opacity': .5, 'stroke-width': 1 }, g); TX(g, 112, y + 5, String(v), 't-axis', { 'text-anchor': 'end' }); });
-        var bars = [], pts = [];
-        years.forEach(function (yr, i) {
-            var x = 170 + i * 125, bg2 = E('g', {}, g);
-            var b1 = E('rect', { x: x, y: base, width: 72, height: 0, fill: C.conv }, bg2), b2 = E('rect', { x: x, y: base, width: 72, height: 0, fill: C.cench }, bg2);
-            TX(g, x + 36, base + 26, String(yr), 't-axis', { 'text-anchor': 'middle' });
-            bars.push([b1, b2, i]);
-            pts.push([x + 36, 545 - (prodv[i] - 30) / 84 * 250]);
-        });
-        var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0] + ' ' + p[1]; }).join(' ');
-        var line = E('path', { d: d, fill: 'none', stroke: C.coral, 'stroke-width': 4, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, g); dashed(line);
-        var pdots = pts.map(function (p) { return E('circle', { cx: p[0], cy: p[1], r: 0, fill: C.coral, stroke: C.noche, 'stroke-width': 2 }, g); });
-        // leyenda
-        var lg = E('g', {}, g);
-        var lx = 640;
-        [[C.conv, 'Convencional', 0], [C.cench, 'No Convencional (CENCH)', 140], [C.coral, 'Producción', 355]].forEach(function (l) { E('rect', { x: lx + l[2], y: 224, width: 14, height: 14, rx: 3, fill: l[0] }, lg); TX(lg, lx + l[2] + 22, 236, l[1], 't-axis', { style: 'font-size:14px' }); });
-        // anotación del pico
-        var pk = 3, px = 170 + pk * 125 + 36, py = base - (conv[pk] + cen[pk]) * sc;
-        var an = E('g', {}, g);
-        E('line', { x1: px, y1: py - 6, x2: px, y2: 214, stroke: C.tinta, 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }, an);
-        E('rect', { x: px - 118, y: 190, width: 236, height: 32, rx: 4, fill: C.coral }, an);
-        TX(an, px, 212, 'Pico de inversión · 2030', 't-small', { 'text-anchor': 'middle', style: 'font-size:16px;font-weight:800;fill:#fff' });
-        an.setAttribute('transform', 'translate(0,0)');
-        return function (t) {
-            hd(t); op(lg, seg(t, 1, 2));
-            bars.forEach(function (b) { var i = b[2], p = out(seg(t, 1.6 + i * .32, 2.7 + i * .32)), h1 = conv[i] * sc * p, h2 = cen[i] * sc * p; b[0].setAttribute('y', (base - h1).toFixed(1)); b[0].setAttribute('height', h1.toFixed(1)); b[1].setAttribute('y', (base - h1 - h2).toFixed(1)); b[1].setAttribute('height', h2.toFixed(1)); });
-            draw(line, inout(seg(t, 5.6, 9.6)));
-            pdots.forEach(function (c, i) { c.setAttribute('r', (6 * back(seg(t, 5.6 + i * .5, 6.1 + i * .5))).toFixed(2)); });
-            rise(an, out(seg(t, 10, 11)), 10);
-        };
-    } });
-
-    // 7 · Cierre
-    scenes.push({ dur: 11, kicker: '07 · CIERRE', cap: 'Plan Anual de Inversiones. Del dato a la decisión.', build: function (g) {
-        var a = TX(g, 640, 330, 'Cada dato,', 't-big', { 'text-anchor': 'middle' }), b = TX(g, 640, 430, 'una decisión.', 't-big', { 'text-anchor': 'middle', style: 'fill:#F8C60A' });
-        var ln = E('rect', { x: 576, y: 470, width: 128, height: 6, fill: C.coral }, g);
-        var s1 = TX(g, 640, 524, 'Plan Anual de Inversiones', 't-sub', { 'text-anchor': 'middle', style: 'font-size:26px;fill:#eaf3f6;font-weight:700' });
-        var s2 = TX(g, 640, 556, 'Subsecretaría de Hidrocarburos · Provincia del Neuquén', 't-sub', { 'text-anchor': 'middle', style: 'font-size:19px' });
-        return function (t) { rise(a, out(seg(t, .6, 1.6)), 24); rise(b, out(seg(t, 1.8, 2.8)), 24); ln.setAttribute('width', (128 * out(seg(t, 3.2, 4))).toFixed(1)); ln.setAttribute('x', (640 - 64 * out(seg(t, 3.2, 4))).toFixed(1)); rise(s1, out(seg(t, 4, 5))); rise(s2, out(seg(t, 4.4, 5.4))); };
-    } });
-
-    // ---------- armado ----------
-    var TOTAL = 0;
-    scenes.forEach(function (s) { s.start = TOTAL; TOTAL += s.dur; s.g = E('g', { visibility: 'hidden' }, svg); s.update = s.build(s.g); });
-    var T = 0, playing = !reduce && !/[?&]pause=1/.test(location.search), last = 0, cur = -1, ended = false;
-    var cap = document.getElementById('cap'), fill = document.getElementById('fill'), time = document.getElementById('time'), track = document.getElementById('track'), cta = document.getElementById('cta'), marks = document.getElementById('marks');
-    scenes.forEach(function (s, i) { if (i) { var m = document.createElement('i'); m.style.left = (s.start / TOTAL * 100) + '%'; marks.appendChild(m); } });
-    track.setAttribute('aria-valuemax', String(TOTAL));
-    function mmss(x) { x = Math.floor(x); return Math.floor(x / 60) + ':' + ('0' + (x % 60)).slice(-2); }
-
-    function setCap(text) { cap.classList.remove('on'); setTimeout(function () { cap.textContent = text; cap.classList.add('on'); }, 220); }
-    function render() {
-        var idx = 0;
-        for (var i = 0; i < scenes.length; i++) if (T >= scenes[i].start) idx = i;
-        if (idx !== cur) { cur = idx; kicker.textContent = scenes[idx].kicker; setCap(scenes[idx].cap); }
-        // el fondo respira despacio y se ve más en la apertura
-        var drift = T * 3; bg.setAttribute('transform', 'translate(' + (-(drift % 40)).toFixed(2) + ',0)');
-        bg.setAttribute('opacity', (idx === 0 ? lerp(.15, .55, seg(T, 0, 1.5)) : .38).toFixed(2));
-        scenes.forEach(function (s, i) {
-            var lt = T - s.start, vis = lt >= -.01 && lt <= s.dur + .01;
-            s.g.setAttribute('visibility', vis ? 'visible' : 'hidden');
-            if (!vis) return;
-            var fadeIn = i === 0 || reduce ? 1 : seg(lt, 0, .5), fadeOut = i === scenes.length - 1 || reduce ? 1 : 1 - seg(lt, s.dur - .5, s.dur);
-            s.g.setAttribute('opacity', Math.min(fadeIn, fadeOut).toFixed(3));
-            s.update(reduce ? s.dur : lt);
-        });
-        var pct = T / TOTAL * 100; fill.style.width = pct + '%'; time.textContent = mmss(T) + ' / ' + mmss(TOTAL);
-        track.setAttribute('aria-valuenow', String(Math.floor(T)));
-        var finalScene = scenes[scenes.length - 1];
-        cta.hidden = !(T >= finalScene.start + 6);
-    }
-    function advance(dt) { if (playing) { T += dt; if (T >= TOTAL) { T = TOTAL; playing = false; ended = true; syncBtn(); } render(); } }
-    function tick(ts) {
-        var dt = last ? Math.min(.1, (ts - last) / 1000) : 0; last = ts;
-        advance(dt);
-        requestAnimationFrame(tick);
-    }
-    function syncBtn() { root.classList.toggle('is-paused', !playing); var b = document.getElementById('play'); b.setAttribute('aria-label', playing ? 'Pausar' : (ended ? 'Reproducir de nuevo' : 'Reproducir')); }
-    function seek(x) { T = Math.max(0, Math.min(TOTAL, x)); ended = T >= TOTAL; if (T < TOTAL && ended) ended = false; render(); }
-    function toggle() { if (ended || T >= TOTAL) { T = 0; ended = false; playing = true; } else playing = !playing; syncBtn(); render(); }
-    function restart() { T = 0; ended = false; playing = true; syncBtn(); render(); }
-
-    document.getElementById('play').addEventListener('click', toggle);
-    document.getElementById('replay').addEventListener('click', restart);
-    document.getElementById('again').addEventListener('click', restart);
-    track.addEventListener('click', function (e) { var r = track.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * TOTAL); });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === ' ' && e.target === document.body) { e.preventDefault(); toggle(); }
-        else if (e.key === 'ArrowRight') seek(T + 5);
-        else if (e.key === 'ArrowLeft') seek(T - 5);
-        else if (e.key === 'Escape') document.getElementById('skip').click();
+    // eje
+    el('line', { x1: 90, x2: 1560, y1: BASE, y2: BASE, stroke: 'rgba(252,242,220,.35)', 'stroke-width': 1.2 }, gB);
+    var pts = [];
+    conv.forEach(function (_, i) {
+        var x = 150 + i * 156, w = 96, hC = conv[i] * K, hN = cen[i] * K, t0 = BARRIDO_INI + (i / (conv.length - 1)) * BARRIDO + azar() * 120;
+        var b1 = el('rect', { x: x, y: BASE - hC, width: w, height: hC, fill: CONVC + '.55)', stroke: 'rgba(255,236,150,.95)', 'stroke-width': 1.4 }, gB);
+        var b2 = el('rect', { x: x, y: BASE - hC - hN, width: w, height: hN, fill: CENC + '.50)', stroke: 'rgba(170,250,255,.95)', 'stroke-width': 1.4 }, gB);
+        [b1, b2].forEach(function (b) { b.style.transformBox = 'fill-box'; b.style.transformOrigin = '50% 100%'; b.style.opacity = 0; });
+        anima(b1, [{ transform: 'scaleY(0)', opacity: 0 }, { transform: 'scaleY(1)', opacity: 1, offset: .35 }, { transform: 'scaleY(1)', opacity: 1 }], { duration: 1100, delay: t0, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        anima(b2, [{ transform: 'scaleY(0)', opacity: 0 }, { transform: 'scaleY(1)', opacity: 1, offset: .35 }, { transform: 'scaleY(1)', opacity: 1 }], { duration: 1100, delay: t0 + 260, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        var ye = el('text', { x: x + w / 2, y: BASE + 36, 'text-anchor': 'middle', fill: 'rgba(252,242,220,.55)', 'font-size': 22, 'font-weight': 700 }, gB);
+        ye.textContent = CIFRAS.anio + i; ye.style.opacity = 0;
+        anima(ye, [{ opacity: 0 }, { opacity: 1 }], { duration: 600, delay: t0 + 300 });
+        pts.push([x + w / 2, 640 - (prod[i] - 28) / 82 * 330]);
     });
-    window.__intro = { seek: seek, advance: advance, state: function () { return { T: T, playing: playing, ended: ended }; }, total: TOTAL, pause: function () { playing = false; syncBtn(); } };   // útil para revisar cuadros sueltos
-    syncBtn(); render(); requestAnimationFrame(tick);
+
+    // curva de producción: Catmull-Rom → Bézier; se dibuja y después corre el fluido por dentro
+    var d = 'M' + pts[0][0] + ' ' + pts[0][1];
+    for (var k = 0; k < pts.length - 1; k++) {
+        var p0 = pts[Math.max(0, k - 1)], p1 = pts[k], p2 = pts[k + 1], p3 = pts[Math.min(pts.length - 1, k + 2)];
+        d += ' C' + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + ',' + (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + ',' + p2[0] + ' ' + p2[1];
+    }
+    var T_CURVA = 900, DUR_CURVA = 2300;
+    var base = el('path', { d: d, pathLength: 1, fill: 'none', stroke: 'rgba(242,96,84,.26)', 'stroke-width': 9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, gC);
+    var fino = el('path', { d: d, pathLength: 1, fill: 'none', stroke: 'rgba(255,150,138,.98)', 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, gC);
+    [base, fino].forEach(function (n) { n.style.strokeDasharray = 1; n.style.strokeDashoffset = 1; });
+    anima(base, [{ strokeDashoffset: 1, opacity: 0 }, { strokeDashoffset: 0, opacity: 1 }], { duration: DUR_CURVA, delay: T_CURVA, easing: 'cubic-bezier(.5,0,.2,1)' });
+    anima(fino, [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: DUR_CURVA, delay: T_CURVA, easing: 'cubic-bezier(.5,0,.2,1)' });
+    var flujo = el('path', { d: d, pathLength: 1, fill: 'none', stroke: '#FFE9E4', 'stroke-width': 3.4, 'stroke-linecap': 'round' }, gF);
+    flujo.style.strokeDasharray = '0.012 0.07'; flujo.style.opacity = 0;
+    anima(flujo, [{ opacity: 0 }, { opacity: .95 }], { duration: 700, delay: T_CURVA + DUR_CURVA });
+    anima(flujo, [{ strokeDashoffset: 0 }, { strokeDashoffset: -0.082 }], { duration: 1500, delay: T_CURVA + DUR_CURVA, iterations: Infinity, fill: 'none' });
+
+    // el pico de inversión: ping y rótulo
+    var pk = 4, pkx = 150 + pk * 156 + 48, pky = BASE - (conv[pk] + cen[pk]) * K;
+    [0, 420].forEach(function (retraso) {
+        var c = el('circle', { cx: pkx, cy: pky, r: 6, fill: 'none', stroke: '#FFF1B0', 'stroke-width': 2 }, gN); c.style.opacity = 0;
+        c.style.transformBox = 'fill-box'; c.style.transformOrigin = 'center';
+        anima(c, [{ opacity: .95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(9)' }], { duration: 1500, delay: 2800 + retraso, easing: 'cubic-bezier(.1,.6,.3,1)' });
+    });
+    var nota = el('g', {}, gN); nota.style.opacity = 0;
+    el('line', { x1: pkx, y1: pky - 10, x2: pkx, y2: pky - 78, stroke: 'rgba(255,241,176,.8)', 'stroke-width': 1.6, 'stroke-dasharray': '5 5' }, nota);
+    var tn = el('text', { x: pkx, y: pky - 92, 'text-anchor': 'middle', fill: '#FFF1B0', 'font-size': 26, 'font-weight': 800 }, nota);
+    tn.textContent = 'Pico de inversión · ' + (CIFRAS.anio + pk);
+    anima(nota, [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 800, delay: 3000, easing: 'ease-out' });
+
+    // barrido de luz que recorre el gráfico de oeste a este (acompaña la subida de las barras)
+    anima($('.intro__barrido'), [{ transform: 'translateX(0px)', opacity: 0 }, { opacity: 1, offset: .1 }, { opacity: 1, offset: .85 },
+        { transform: 'translateX(' + (CW + 200) + 'px)', opacity: 0 }], { duration: BARRIDO + 500, delay: BARRIDO_INI - 150, easing: 'linear' });
+
+    // cámara: arranca sobre el tramo de mayor inversión y se aleja hasta mostrar todo el gráfico; después, una deriva lentísima
+    anima(camara, [{ transform: mat(ini, s0) }, { transform: mat(fin, s1) }], { duration: 4700, delay: 500, easing: 'cubic-bezier(.45,.02,.18,1)' });
+    anima(camara, [{ transform: mat(fin, s1) }, { transform: mat({ x: fin.x + 8, y: fin.y - 4 }, s1 * 1.012) }], { duration: FIN - 5200, delay: 5200, easing: 'linear', fill: 'forwards' });
+    // el gráfico pasa a ser el fondo mientras corren las palabras, y vuelve a brillar en el cierre
+    anima(camara, [{ opacity: 1 }, { opacity: .13 }], { duration: 700, delay: T_DIM, easing: 'ease-in-out' });
+    anima(camara, [{ opacity: .13 }, { opacity: 1 }], { duration: 1300, delay: T_TEXTO - 300, easing: 'ease-out', fill: 'forwards' });
+
+    // ping inicial (anillos de radar en el centro del encuadre)
+    var pg = $('.intro__pings');
+    [0, 380].forEach(function (retraso) {
+        var c = el('circle', { cx: W * .5, cy: H * .5, r: 4, fill: 'none', stroke: '#FFF1B0', 'stroke-width': 1.4 }, pg);
+        c.style.opacity = 0;
+        anima(c, [{ opacity: .9, r: 4 }, { opacity: 0, r: Math.min(W, H) * .22 }], { duration: 1500, delay: 250 + retraso, easing: 'cubic-bezier(.1,.6,.3,1)' });
+    });
+    var punto = el('circle', { cx: W * .5, cy: H * .5, r: 3.2, fill: '#FFFBE6' }, pg); punto.style.opacity = 0;
+    anima(punto, [{ opacity: 0, r: 1 }, { opacity: 1, r: 3.4, offset: .25 }, { opacity: 1, r: 3.4, offset: .7 }, { opacity: 0, r: 2 }], { duration: 2400, delay: 150 });
+
+    // barras de cine
+    anima($('.intro__barra--sup'), [{ transform: 'translateY(-100%)' }, { transform: 'translateY(0)' }], { duration: 900, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    anima($('.intro__barra--inf'), [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], { duration: 900, easing: 'cubic-bezier(.2,.7,.2,1)' });
+
+    // ================================================================ B. LAS PALABRAS DEL SISTEMA
+    todos('.intro__pal').forEach(function (p, i) {
+        var texto = p.textContent; p.textContent = '';
+        var letras = texto.split('').map(function (ch) { var s = document.createElement('i'); s.textContent = ch; p.appendChild(s); return s; });
+        var t = T_C + i * PASO_C;
+        anima(p, [{ visibility: 'visible' }, { visibility: 'visible' }], { duration: PASO_C + 20, delay: t, fill: 'none' });
+        letras.forEach(function (l, j) {
+            anima(l, [{ transform: 'translateY(62%) scale(1.06)', opacity: 0, filter: 'blur(14px)' }, { transform: 'translateY(0) scale(1)', opacity: 1, filter: 'blur(0)' }],
+                { duration: 400, delay: t + j * 16, easing: 'cubic-bezier(.16,.9,.2,1)', fill: 'backwards' });
+            anima(l, [{ transform: 'translateY(0)', opacity: 1, filter: 'blur(0)' }, { transform: 'translateY(-34%)', opacity: 0, filter: 'blur(10px)' }],
+                { duration: 160, delay: t + PASO_C - 105 + j * 6, easing: 'ease-in', fill: 'forwards' });
+        });
+    });
+
+    // ================================================================ C. EL CIERRE
+    anima($('.intro__marca'), [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 900, delay: T_TEXTO - 300, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    todos('.intro__palabra').forEach(function (p, i) {
+        var t = T_TEXTO + 200 + i * 240;
+        anima(p, [{ transform: 'translateY(115%)', opacity: 0, filter: 'blur(14px)', letterSpacing: '.16em' }, { transform: 'translateY(0)', opacity: 1, filter: 'blur(0)', letterSpacing: '-.03em' }],
+            { duration: 1200, delay: t, easing: 'cubic-bezier(.16,.9,.2,1)' });
+        anima(p, [{ backgroundPosition: '130% 0' }, { backgroundPosition: '-30% 0' }], { duration: 1400, delay: t + 800, easing: 'ease-in-out', composite: 'replace' });
+    });
+    anima($('.intro__filete'), [{ width: 0 }, { width: 'min(22vw, 220px)' }], { duration: 1000, delay: T_TEXTO + 800, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    anima($('.intro__lema'), [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 800, delay: T_TEXTO + 1000, easing: 'ease-out' });
+    var T_CIFRAS = T_TEXTO + 1300, DUR_CIFRAS = 1700;
+    todos('.intro__cifra').forEach(function (c, i) {
+        anima(c, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 650, delay: T_CIFRAS + i * 150, easing: 'ease-out' });
+    });
+
+    // ---------------------------------------------------------------- números que cuentan
+    var fmt = new Intl.NumberFormat('es-AR');
+    function frena(t) { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); }
+    function pintar(ms) {
+        todos('[data-n]').forEach(function (b, i) {
+            var n = b.getAttribute('data-n'), f = frena((ms - (T_CIFRAS + i * 150)) / DUR_CIFRAS);
+            if (n === 'anio') b.textContent = String(Math.round(CIFRAS.anio - 8 + 8 * f));      // el año "corre" hasta la convocatoria vigente
+            else b.textContent = fmt.format(Math.round(CIFRAS[n] * f));
+        });
+    }
+    // sin las cifras de Legajos (servicio caído) se ocultan esas dos y queda la convocatoria
+    if (!CIFRAS.empresas) todos('[data-n="empresas"], [data-n="areas"]').forEach(function (b) { b.parentNode.style.display = 'none'; });
+    var saltar = $('.intro__saltar');
+    anima(saltar, [{ opacity: 0 }, { opacity: 1 }], { duration: 600, delay: 1200 });
+
+    // ---------------------------------------------------------------- reloj
+    var raf = 0, terminada = false;
+    function terminar(ms) {
+        if (terminada) return; terminada = true; cancelAnimationFrame(raf);
+        document.removeEventListener('keydown', alTeclado);
+        root.dispatchEvent(new CustomEvent('intro:fin', { bubbles: true }));
+        desvanecer(ms);
+    }
+    function alTeclado(e) { if (e.key === 'Escape') terminar(350); }
+    document.addEventListener('keydown', alTeclado);
+    saltar.addEventListener('click', function () { terminar(350); });
+
+    var fijo = q.get('introT');                       // cuadro fijo, para revisar la animación: ?intro=1&introT=3.5
+    if (fijo !== null) {
+        var ms = parseFloat(fijo) * 1000;
+        anims.forEach(function (a) { a.pause(); a.currentTime = ms; });
+        pintar(ms);
+        return;
+    }
+    var t0 = performance.now();
+    (function paso() {
+        var ms = performance.now() - t0;
+        pintar(ms);
+        if (ms >= FIN) { terminar(700); return; }
+        raf = requestAnimationFrame(paso);
+    })();
 })();

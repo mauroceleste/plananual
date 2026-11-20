@@ -1,0 +1,53 @@
+@* Introducción animada (unos 11 s): se dibuja solo cuando el layout lo indica (una vez por sesión). Estilos: css/intro.css, lógica: js/intro.js *@
+@model PlanAnual.Web.Componentes.IntroDatos
+<noscript><style>.intro { display: none !important; }</style></noscript>
+<link rel="stylesheet" href="~/css/intro.css" asp-append-version="true" />
+<div class="intro" id="intro" tabindex="-1" role="dialog" aria-modal="true" aria-label="Introducción al Plan Anual de Inversiones"
+     data-empresas="@Model.Empresas" data-areas="@Model.Areas" data-anio="@Model.Anio" data-cookie-path="@Url.Content("~/")">
+    <svg class="intro__lienzo" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <defs>
+            <linearGradient id="intro-barrido" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0" stop-color="#F8C60A" stop-opacity="0"/>
+                <stop offset=".85" stop-color="#F8C60A" stop-opacity=".26"/>
+                <stop offset="1" stop-color="#FFF3C2" stop-opacity=".8"/>
+            </linearGradient>
+        </defs>
+        <g class="intro__camara">
+            <g class="intro__graticula"></g>
+            <g class="intro__barras"></g>
+            <g class="intro__curva"></g>
+            <g class="intro__flujo"></g>
+            <g class="intro__notas"></g>
+            <rect class="intro__barrido" x="-60" y="-200" width="60" height="1300" fill="url(#intro-barrido)" opacity="0"/>
+        </g>
+        <g class="intro__pings"></g>
+    </svg>
+    <div class="intro__vineta"></div>
+    <div class="intro__grano"></div>
+    <div class="intro__barra intro__barra--sup"></div><div class="intro__barra intro__barra--inf"></div>
+
+    <div class="intro__palabras" aria-hidden="true">
+        <span class="intro__pal intro__pal--amarillo">Inversiones</span>
+        <span class="intro__pal intro__pal--turquesa">Producción</span>
+        <span class="intro__pal intro__pal--crema">Planes</span>
+        <span class="intro__pal intro__pal--coral">Decisiones</span>
+    </div>
+
+    <div class="intro__texto" aria-hidden="true">
+        <div class="intro__marca"><img src="~/img/nqn-isologo.svg" alt=""><span></span><small>Subsecretaría<br>de Hidrocarburos</small></div>
+        <div class="intro__titulo">
+            <span class="intro__linea"><span class="intro__palabra">Plan Anual</span></span>
+            <span class="intro__linea"><span class="intro__palabra intro__palabra--acento">de Inversiones</span></span>
+        </div>
+        <div class="intro__filete"></div>
+        <p class="intro__lema">Los planes de las operadoras de Neuquén,<br>del dato a la decisión.</p>
+        <div class="intro__cifras">
+            <div class="intro__cifra"><b data-n="empresas">0</b><i>Empresas operadoras</i></div>
+            <div class="intro__cifra"><b data-n="areas">0</b><i>Áreas</i></div>
+            <div class="intro__cifra"><b data-n="anio" data-sinmiles="1">0</b><i>Convocatoria</i></div>
+        </div>
+    </div>
+
+    <button class="intro__saltar" type="button" aria-label="Saltar la introducción">Saltar ›</button>
+</div>
+<script src="~/js/intro.js" asp-append-version="true" defer></script>
