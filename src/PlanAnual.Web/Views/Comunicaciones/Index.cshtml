@@ -117,7 +117,14 @@
                             @if (!string.IsNullOrWhiteSpace(m.Detalle)) { <div class="linea__detalle">@m.Detalle</div> }
                             <div class="linea__meta">
                                 <span>@m.Usuario</span>
-                                @if (m.NumeroGde is not null) { <span>GDE: <strong>@m.NumeroGde</strong></span> }
+                                @if (m.NumeroGde is not null)
+                                {
+                                    <span>GDE: <strong>@m.NumeroGde</strong></span>
+                                    @if (!Model.EsEmpresa && PlanAnual.Infrastructure.Gde.GdeClient.TienePdf(m.NumeroGde))
+                                    {
+                                        <a href="@Url.Content("~/Plan/DocumentoGde")?numero=@Uri.EscapeDataString(m.NumeroGde)" target="_blank" rel="noopener" title="Abre el PDF desde GDE (puede tardar unos segundos)">@Url.Icono("download") Ver en GDE</a>
+                                    }
+                                }
                                 @if (m.PlazoHasta is { } pl)
                                 {
                                     <span>@(m.Tipo == "ProrrogaOtorgada" ? "Nuevo plazo" : m.Tipo == "Rechazado" ? "Puede volver a presentar hasta" : m.Tipo == "ProrrogaSolicitada" ? "Pide hasta" : "Plazo") <strong>@Formato.Fecha(pl)</strong></span>

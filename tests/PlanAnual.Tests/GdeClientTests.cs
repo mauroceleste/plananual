@@ -82,4 +82,30 @@ public class GdeClientTests
         var r = await c.HistorialAsync("EX-2026-00297840-NEU-SEMH");
         Assert.False(r.Ok); Assert.Contains("No se pudo conectar", r.Mensaje);
     }
+
+    [Fact]
+    public async Task Baja_el_pdf_de_un_documento_con_la_clave_y_el_numero_codificado()
+    {
+        var pdf = Encoding.ASCII.GetBytes("%PDF-1.4 prueba");
+        var (c, h) = Cliente(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(pdf) { Headers = { ContentType = new("application/pdf") } } });
+        var r = await c.DocumentoPdfAsync(" no-2026-00297840-neu-semh#mern ");
+        Assert.True(r.Ok); Assert.Equal(pdf, r.Bytes); Assert.Equal("NO-2026-00297840-NEU-SEMH_MERN.pdf", r.NombreArchivo);
+        Assert.Equal("clave-de-prueba-1234", h.Ultimo!.Headers.GetValues("X-Api-Key").Single());
+        Assert.EndsWith("api/gde/documento/NO-2026-00297840-NEU-SEMH%23MERN/pdf", h.Ultimo.RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task El_pdf_informa_el_error_de_GDE_y_no_llama_si_es_un_expediente_o_un_numero_invalido()
+    {
+        var (c, _) = Cliente(_ => Json(HttpStatusCode.NotFound, """{"ok":false,"codigo":"NoEncontrado","mensaje":"No existe ese documento."}"""));
+        var r = await c.DocumentoPdfAsync("NO-2026-00297840-NEU-SEMH");
+        Assert.False(r.Ok); Assert.Equal("No existe ese documento.", r.Mensaje); Assert.Null(r.Bytes);
+
+        var llamadas = 0;
+        var (c2, _) = Cliente(_ => { llamadas++; return Json(HttpStatusCode.OK, "{}"); });
+        Assert.False((await c2.DocumentoPdfAsync("EX-2026-00297840-NEU-SEMH")).Ok);   // los expedientes no tienen PDF
+        Assert.False((await c2.DocumentoPdfAsync("hola")).Ok);
+        Assert.Equal(0, llamadas);
+        Assert.True(GdeClient.TienePdf("IF-2026-03245422-NEU-TICS#SEMH")); Assert.False(GdeClient.TienePdf("EX-2026-00297840-NEU-SEMH"));
+    }
 }

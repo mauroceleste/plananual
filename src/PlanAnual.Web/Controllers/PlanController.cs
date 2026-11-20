@@ -103,6 +103,20 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
         return PartialView("_HistorialExpediente", await gde.HistorialAsync(numero ?? "", ct));
     }
 
+    /// <summary>
+    /// Baja el PDF de una nota o documento de GDE y lo abre en el navegador. Lo ve Administración y la Subsecretaría, no las empresas: la API de GDE
+    /// no distingue usuarios, así que quién puede bajar se decide acá.
+    /// </summary>
+    [HttpGet("Plan/DocumentoGde")]
+    public async Task<IActionResult> DocumentoGde(string? numero, CancellationToken ct)
+    {
+        if (User.ToSesion().Rol == Rol.Empresa) return Forbid();
+        var r = await gde.DocumentoPdfAsync(numero ?? "", ct);
+        if (r.Ok) return File(r.Bytes!, "application/pdf");
+        var msg = System.Net.WebUtility.HtmlEncode(r.Mensaje);
+        return Content($"<!doctype html><meta charset=\"utf-8\"><title>GDE</title><body style=\"font-family:system-ui;margin:2rem\"><h3>No se pudo bajar el documento</h3><p>{msg}</p><p><a href=\"javascript:window.close()\">Cerrar</a></p>", "text/html; charset=utf-8", System.Text.Encoding.UTF8);
+    }
+
     /// <summary>Historial de modificaciones de un área (quién cambió qué y cuándo), para el modal del listado. Solo Administración.</summary>
     [HttpGet("Plan/HistorialArea")]
     public async Task<IActionResult> HistorialArea(string cuit, int idBloque)
