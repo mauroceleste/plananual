@@ -83,6 +83,7 @@
                     <span class="avatar" aria-hidden="true">@Formato.Iniciales(u.Nombre.Replace("Usuario de prueba", "UP"))</span>
                     <span class="user-chip__text"><span class="user-chip__name">@u.Nombre</span><span class="user-chip__role">@u.Rol</span></span>
                 </div>
+                <a class="icon-btn" asp-controller="Introduccion" asp-action="Index" title="Ver introducción al sistema" aria-label="Ver introducción al sistema">@Url.Icono("sparkles")</a>
                 <form asp-controller="Account" asp-action="Logout" method="post" class="m-0"><button class="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión">@Url.Icono("logout")</button></form>
             </div>
         </div>

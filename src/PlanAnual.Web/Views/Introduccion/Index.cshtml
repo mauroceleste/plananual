@@ -1,0 +1,43 @@
+@{ Layout = null; }
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Introducción | Plan Anual de Inversiones</title>
+    <meta name="theme-color" content="#00212e" />
+    <link rel="icon" type="image/svg+xml" href="~/img/favicon.svg" />
+    <link rel="preload" href="~/lib/fonts/manrope/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="~/css/intro.css" asp-append-version="true" />
+</head>
+<body>
+<main class="intro" id="intro">
+    <svg id="stage" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="Animación que presenta el sistema: desde la carga de los planes por área hasta el tablero de la Subsecretaría."></svg>
+
+    <a class="intro__skip" href="@Url.Content("~/")" id="skip">Saltar introducción <span aria-hidden="true">→</span></a>
+    <p class="intro__cap" id="cap" aria-live="polite"></p>
+
+    <div class="intro__cta" id="cta" hidden>
+        <a class="intro__btn intro__btn--main" href="@Url.Content("~/")">Ingresar al sistema</a>
+        <button type="button" class="intro__btn" id="again">Ver de nuevo</button>
+    </div>
+
+    <div class="intro__bar">
+        <button type="button" class="intro__ico" id="play" aria-label="Pausar" title="Pausar / reproducir (barra espaciadora)">
+            <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+            <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button type="button" class="intro__ico" id="replay" aria-label="Repetir desde el principio" title="Repetir">
+            <svg viewBox="0 0 24 24"><path d="M12 5V2L7 6.5 12 11V8a5 5 0 1 1-5 5H5a7 7 0 1 0 7-8z"/></svg>
+        </button>
+        <div class="intro__track" id="track" role="slider" tabindex="0" aria-label="Progreso de la introducción" aria-valuemin="0" aria-valuemax="72" aria-valuenow="0">
+            <div class="intro__marks" id="marks"></div>
+            <div class="intro__fill" id="fill"></div>
+        </div>
+        <span class="intro__time" id="time">0:00 / 1:12</span>
+    </div>
+</main>
+<script src="~/js/intro.js" asp-append-version="true"></script>
+</body>
+</html>
