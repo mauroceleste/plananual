@@ -15,7 +15,7 @@ namespace PlanAnual.Web.Controllers;
 
 [Authorize]
 public class PlanController(PresentacionService svc, ILegajosClient legajos, PlanAnualDbContext db, ITipoActividadProvider tiposProvider, IConfiguration config,
-    IWebHostEnvironment env, IGdeClient gde) : Controller
+    IWebHostEnvironment env, IGdeClient gde, ComunicacionService comunicaciones) : Controller
 {
     static readonly string[] ExtensionesPermitidas = [".pdf", ".xlsx", ".xls", ".xlsb", ".docx", ".doc", ".pptx", ".csv", ".png", ".jpg", ".jpeg", ".zip", ".kml", ".kmz"];
 
@@ -39,6 +39,18 @@ public class PlanController(PresentacionService svc, ILegajosClient legajos, Pla
             var ultimas = vm.Ciclo is null ? [] : await svc.UltimasPorBloqueAsync(vm.Ciclo.Id, cuits, conAnexos: u.Rol == Rol.Administrador);
             var solicitudes = vm.Ciclo is null ? [] : await svc.UltimasSolicitudesAsync(vm.Ciclo.Id, cuits);
             vm.Filas = bloques.Select(b => new FilaArea(b, null, ultimas.GetValueOrDefault(b.IdBloque), solicitudes.GetValueOrDefault(b.IdBloque))).ToList();
+            if (vm.Ciclo is not null && cuits.Count > 0)
+            {
+                // Plazo propio de la empresa (prórrogas) y lo último que le comunicó la Subsecretaría.
+                var novedades = new List<MovimientoVm>(); var limites = new List<DateOnly>();
+                foreach (var cu in cuits)
+                {
+                    var linea = await comunicaciones.LineaDeTiempoAsync(u, vm.Ciclo, cu);
+                    limites.Add(linea.LimiteDeLaEmpresa); novedades.AddRange(linea.Movimientos.Where(m => m.Origen == "Registro")); vm.NotasPendientes += linea.NotasPendientes;
+                }
+                vm.LimiteEmpresa = limites.Max();
+                vm.Novedades = novedades.OrderByDescending(m => m.Fecha).Take(3).ToList();
+            }
             vm.Actividades = await svc.ActividadesAsync(vm.Filas.Where(f => f.Ultima is not null).Select(f => f.Ultima!.Id));
             vm.Pendientes = await svc.PendientesAsync(vm.Filas.Where(f => f.Ultima?.Estado == EstadoPresentacion.Borrador).Select(f => f.Ultima!.Id));
             vm.RazonAsistida = bloques.FirstOrDefault()?.RazonSocial;

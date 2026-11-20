@@ -198,6 +198,56 @@ public class HistorialArea
     public int? Version { get; set; }
 }
 
+/// <summary>Tipo de movimiento en el ida y vuelta entre la Subsecretaría y una empresa.</summary>
+public enum TipoComunicacion
+{
+    NotaEnviada = 1,         // la Subsecretaría le manda una nota o mail (pide información, avisa algo); puede tener plazo de respuesta
+    RespuestaEmpresa = 2,    // la empresa contesta (recibida por GDE o mail y registrada acá)
+    ProrrogaSolicitada = 3,  // la empresa pide más plazo
+    ProrrogaOtorgada = 4,    // la Subsecretaría la concede: PlazoHasta es el nuevo límite de esa empresa
+    Observado = 5,           // el plan tiene observaciones que hay que subsanar
+    Rechazado = 6,           // el plan se rechaza; PlazoHasta es hasta cuándo puede volver a presentarlo
+    Aprobado = 7,            // el plan se da por aprobado
+}
+
+/// <summary>
+/// Un movimiento registrado entre la Subsecretaría y una empresa: nota o mail, respuesta, prórroga o decisión. Se ve en la línea de tiempo de la empresa.
+/// Los envíos del plan y los pedidos de rectificación no se guardan acá: el sistema ya los tiene y se suman al mostrar la línea.
+/// </summary>
+public class Comunicacion
+{
+    public long Id { get; set; }
+    public int CicloId { get; set; }
+    public string Cuit { get; set; } = "";
+    public string RazonSocial { get; set; } = "";
+    /// <summary>Si se refiere a un área en particular (opcional; por defecto es de toda la empresa).</summary>
+    public int? IdBloque { get; set; }
+    public string? NombreArea { get; set; }
+    public DateTime Fecha { get; set; }
+    public TipoComunicacion Tipo { get; set; }
+    public string Asunto { get; set; } = "";
+    public string? Detalle { get; set; }
+    /// <summary>Número de nota, expediente o documento de GDE (referencia, sin consultarlo).</summary>
+    public string? NumeroGde { get; set; }
+    /// <summary>Plazo de respuesta (nota), nuevo límite (prórroga otorgada) o hasta cuándo puede volver a presentar (rechazo).</summary>
+    public DateOnly? PlazoHasta { get; set; }
+    /// <summary>Si es una respuesta o una prórroga otorgada: la nota o el pedido al que contesta.</summary>
+    public long? RespondeA { get; set; }
+    /// <summary>La empresa ve este movimiento en su pantalla (por defecto sí).</summary>
+    public bool VisibleParaEmpresa { get; set; } = true;
+    public int UsuarioId { get; set; }
+    public string Usuario { get; set; } = "";
+
+    public string? AdjuntoNombre { get; set; }
+    public string? AdjuntoRuta { get; set; }
+    public long? AdjuntoTamano { get; set; }
+    public string? AdjuntoSha256 { get; set; }
+
+    public bool MailEnviado { get; set; }
+    public string? MailDestinatarios { get; set; }
+    public string? MailError { get; set; }
+}
+
 public class EnvioMail
 {
     public long Id { get; set; }

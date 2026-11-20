@@ -25,13 +25,14 @@
 
     <div class="table-card"><div class="table-responsive">
         <table class="table data-table is-cards datos" data-archivo="seguimiento_plan_anual">
-            <thead><tr><th>Empresa</th><th>CUIT</th><th class="text-end">Áreas</th><th class="text-end">Enviadas</th><th class="text-end">En borrador</th><th>Estado</th>@if (esAdmin) {<th data-sin-orden data-sin-exportar></th>}</tr></thead>
+            <thead><tr><th>Empresa</th><th>CUIT</th><th class="text-end">Áreas</th><th class="text-end">Enviadas</th><th class="text-end">En borrador</th><th>Estado</th><th data-sin-orden data-sin-exportar>Comunicaciones</th>@if (esAdmin) {<th data-sin-orden data-sin-exportar></th>}</tr></thead>
             <tbody>
             @foreach (var e in Model.Empresas)
             {
                 <tr><td data-label="Empresa"><span class="t-title">@e.Razon</span></td><td data-label="CUIT" class="t-num">@e.Cuit</td>
                     <td data-label="Áreas" class="t-num text-end">@e.Bloques</td><td data-label="Enviadas" class="t-num text-end">@e.Enviadas</td><td data-label="En borrador" class="t-num text-end">@e.Borradores</td>
                     <td data-label="Estado"><span class="chip @Chip(e.Estado)">@e.Estado</span></td>
+                    <td data-label="Comunicaciones" class="t-actions"><a class="btn btn-ghost btn-sm" asp-controller="Comunicaciones" asp-action="Index" asp-route-cuit="@e.Cuit" asp-route-anio="@c?.Anio">@Url.Icono("mail") Ver @if (Model.NotasPendientes.GetValueOrDefault(e.Cuit) is > 0 and var pend) { <span class="badge rounded-pill text-bg-warning ms-1" title="Notas sin respuesta">@pend</span> }</a></td>
                     @if (esAdmin) {<td class="t-actions"><a class="btn btn-ghost btn-sm" asp-controller="Plan" asp-action="Index" asp-route-cuit="@e.Cuit">@Url.Icono("edit") Asistir</a></td>}</tr>
             }
             </tbody>

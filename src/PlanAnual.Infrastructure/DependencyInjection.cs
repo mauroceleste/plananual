@@ -48,6 +48,7 @@ public static class DependencyInjection
         s.AddSingleton<IConfigurationLike>(new ConfigAdapter(config));
         s.AddSingleton<IMailSender, SmtpMailSender>();
         s.AddScoped<PresentacionService>();
+        s.AddScoped<ComunicacionService>();
         s.AddScoped<TableroService>();
         s.AddScoped<ITipoActividadProvider, TipoActividadProvider>();
         return s;

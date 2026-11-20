@@ -149,6 +149,128 @@ namespace PlanAnual.Infrastructure.Migrations
                     b.ToTable("ciclos", (string)null);
                 });
 
+            modelBuilder.Entity("PlanAnual.Domain.Entities.Comunicacion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AdjuntoNombre")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)")
+                        .HasColumnName("adjunto_nombre");
+
+                    b.Property<string>("AdjuntoRuta")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("adjunto_ruta");
+
+                    b.Property<string>("AdjuntoSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("adjunto_sha256");
+
+                    b.Property<long?>("AdjuntoTamano")
+                        .HasColumnType("bigint")
+                        .HasColumnName("adjunto_tamano");
+
+                    b.Property<string>("Asunto")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("asunto");
+
+                    b.Property<int>("CicloId")
+                        .HasColumnType("integer")
+                        .HasColumnName("ciclo_id");
+
+                    b.Property<string>("Cuit")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("cuit");
+
+                    b.Property<string>("Detalle")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("detalle");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("fecha");
+
+                    b.Property<int?>("IdBloque")
+                        .HasColumnType("integer")
+                        .HasColumnName("id_bloque");
+
+                    b.Property<string>("MailDestinatarios")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("mail_destinatarios");
+
+                    b.Property<bool>("MailEnviado")
+                        .HasColumnType("boolean")
+                        .HasColumnName("mail_enviado");
+
+                    b.Property<string>("MailError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("mail_error");
+
+                    b.Property<string>("NombreArea")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("nombre_area");
+
+                    b.Property<string>("NumeroGde")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("numero_gde");
+
+                    b.Property<DateOnly?>("PlazoHasta")
+                        .HasColumnType("date")
+                        .HasColumnName("plazo_hasta");
+
+                    b.Property<string>("RazonSocial")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("razon_social");
+
+                    b.Property<long?>("RespondeA")
+                        .HasColumnType("bigint")
+                        .HasColumnName("responde_a");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("integer")
+                        .HasColumnName("tipo");
+
+                    b.Property<string>("Usuario")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("usuario");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("integer")
+                        .HasColumnName("usuario_id");
+
+                    b.Property<bool>("VisibleParaEmpresa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("visible_para_empresa");
+
+                    b.HasKey("Id")
+                        .HasName("pk_comunicaciones");
+
+                    b.HasIndex("CicloId", "Cuit", "Fecha")
+                        .HasDatabaseName("ix_comunicaciones_ciclo_id_cuit_fecha");
+
+                    b.ToTable("comunicaciones", (string)null);
+                });
+
             modelBuilder.Entity("PlanAnual.Domain.Entities.EnvioMail", b =>
                 {
                     b.Property<long>("Id")
@@ -597,6 +719,16 @@ namespace PlanAnual.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_anexos_presentaciones_presentacion_id");
+                });
+
+            modelBuilder.Entity("PlanAnual.Domain.Entities.Comunicacion", b =>
+                {
+                    b.HasOne("PlanAnual.Domain.Entities.Ciclo", null)
+                        .WithMany()
+                        .HasForeignKey("CicloId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_comunicaciones_ciclos_ciclo_id");
                 });
 
             modelBuilder.Entity("PlanAnual.Domain.Entities.EnvioMail", b =>

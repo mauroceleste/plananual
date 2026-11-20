@@ -6,7 +6,7 @@
         <div><span class="page-head__eyebrow">@(c?.Nombre ?? "Plan de Inversiones")</span><h1>@(asiste ? Model.RazonAsistida : "Mis áreas")</h1>
             @if (asiste) { <p>Estás asistiendo a esta empresa en la carga.</p> }
             else { <p>Cargá una planilla por cada área que operás. Podés guardar borradores y completarlos después; recién se envía cuando vos lo confirmás.</p> }</div>
-        @if (asiste) { <a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index">@Url.Icono("arrow-left") Presentaciones</a> }
+        @if (asiste) { <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-secondary" asp-controller="Comunicaciones" asp-action="Index" asp-route-cuit="@Model.CuitAsistido">@Url.Icono("mail") Comunicaciones</a><a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index">@Url.Icono("arrow-left") Presentaciones</a></div> }
     </div>
     @if (asiste) { <div class="alert alert-info">@Url.Icono("info")<div><strong>Asistencia de Administración.</strong> Todo lo que cargues, adjuntes o envíes queda registrado a tu nombre, en nombre de la empresa. El comprobante y el mail lo indican.</div></div> }
 
@@ -14,11 +14,36 @@
     else
     {
         var hoy = DateOnly.FromDateTime(DateTime.Today);
-        var dias = c.LimiteVigente.DayNumber - hoy.DayNumber;
+        var limite = Model.LimiteEmpresa ?? c.LimiteVigente;
+        var dias = limite.DayNumber - hoy.DayNumber;
         <div class="alert @(dias < 0 ? "alert-danger" : dias <= 7 ? "alert-warning" : "alert-info")">@Url.Icono("clock")
-            <div>Fecha límite: <strong>@Formato.Fecha(c.LimiteVigente)</strong>@(c.FechaProrroga is not null ? " (con prórroga)" : "").
+            <div>Fecha límite: <strong>@Formato.Fecha(limite)</strong>@(limite > c.LimiteVigente ? " (prórroga otorgada a la empresa)" : c.FechaProrroga is not null ? " (con prórroga)" : "").
             @(dias < 0 ? "El plazo venció: se registrará como presentación fuera de término." : dias == 0 ? "Vence hoy." : $"Faltan {dias} días.")
             El año @c.Anio se considera compromiso firme de cumplimiento.</div></div>
+        @if (Model.Novedades.Count > 0 || Model.NotasPendientes > 0)
+        {
+            <div class="panel mb-3">
+                <div class="panel__head d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h2 class="panel__title">@Url.Icono("mail") Novedades de la Subsecretaría</h2>
+                    <a class="btn btn-outline-secondary btn-sm" asp-controller="Comunicaciones" asp-action="Index" asp-route-cuit="@Model.CuitAsistido">Ver todas las comunicaciones</a>
+                </div>
+                @if (Model.NotasPendientes > 0)
+                {
+                    <div class="alert alert-warning mb-2">@Url.Icono("alert")<div>La Subsecretaría te envió <strong>@Model.NotasPendientes nota(s)</strong> que esperan tu respuesta. Respondé por GDE o por la vía que indica la nota.</div></div>
+                }
+                <ul class="list-unstyled mb-0">
+                    @foreach (var n in Model.Novedades)
+                    {
+                        <li class="py-2 border-top d-flex flex-wrap gap-2 align-items-baseline">
+                            <span class="small text-muted">@Formato.Fecha(n.Fecha)</span>
+                            <strong>@n.Titulo</strong>
+                            @if (n.PlazoHasta is { } plz) { <span class="small">· plazo <strong>@Formato.Fecha(plz)</strong></span> }
+                            @if (n.Estado == "Vencida") { <span class="chip chip--danger">Vencida</span> }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
     }
     @if (TempData["Problemas"] is string problemas)
     {

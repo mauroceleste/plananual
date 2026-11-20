@@ -1,0 +1,207 @@
+@model ComunicacionesVm
+@using PlanAnual.Infrastructure.Servicios
+@{
+    var l = Model.Linea; var c = Model.Ciclo;
+    ViewData["Title"] = "Comunicaciones"; ViewData["Ancha"] = true;
+    var hoy = DateOnly.FromDateTime(DateTime.Today);
+    (string Texto, string Clase) Estado(EstadoEmpresa e) => e switch
+    {
+        EstadoEmpresa.Aprobado => ("Aprobado", "chip--ok"),
+        EstadoEmpresa.Presentado => ("Presentado", "chip--ok"),
+        EstadoEmpresa.Rechazado => ("Rechazado", "chip--danger"),
+        EstadoEmpresa.Observado => ("Observado", "chip--warn"),
+        EstadoEmpresa.InformacionSolicitada => ("Información solicitada", "chip--warn"),
+        EstadoEmpresa.EnCarga => ("En carga", "chip--tag"),
+        _ => ("Sin presentar", "chip--tag"),
+    };
+    // Cada tipo de movimiento: cómo se llama, qué color tiene y su icono.
+    (string Texto, string Color, string Icono) Visual(string tipo) => tipo switch
+    {
+        "NotaEnviada" => ("Nota enviada", "azul", "mail"),
+        "RespuestaEmpresa" => ("Respuesta de la empresa", "turquesa", "building"),
+        "ProrrogaSolicitada" => ("Prórroga solicitada", "amarillo", "clock"),
+        "ProrrogaOtorgada" => ("Prórroga otorgada", "verde", "calendar"),
+        "Observado" => ("Plan observado", "amarillo", "alert"),
+        "Rechazado" => ("Plan rechazado", "coral", "x"),
+        "Aprobado" => ("Plan aprobado", "verde", "check"),
+        "Presentacion" => ("Plan presentado", "gris", "file"),
+        "Rectificatoria" => ("Rectificatoria presentada", "gris", "file"),
+        "RectificacionSolicitada" => ("Pedido de rectificación", "gris", "edit"),
+        "RectificacionHabilitada" => ("Rectificación autorizada", "gris", "check"),
+        "RectificacionRechazada" => ("Rectificación no autorizada", "gris", "x"),
+        _ => (tipo, "gris", "info"),
+    };
+}
+<div class="container-xl is-wide py-4">
+    <div class="page-head">
+        <div><span class="page-head__eyebrow">@(c?.Nombre ?? "Plan de Inversiones") · Comunicaciones</span>
+            <h1>@(l?.RazonSocial ?? "Comunicaciones")</h1>
+            <p>@(Model.EsEmpresa ? "Lo que la Subsecretaría le comunicó a tu empresa sobre el plan, y sus plazos." : "Ida y vuelta con la empresa: notas, respuestas, prórrogas y decisiones sobre el plan.")</p></div>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            @if (Model.Convocatorias.Count > 1)
+            {
+                <partial name="_SelectorConvocatoria" model="@((Model.Convocatorias, c, new Dictionary<string, string?> { ["cuit"] = Model.Cuit }))" />
+            }
+            @if (!Model.EsEmpresa) { <a class="btn btn-outline-secondary" asp-controller="Seguimiento" asp-action="Index" asp-route-anio="@c?.Anio">@Url.Icono("arrow-left") Presentaciones</a> }
+            else { <a class="btn btn-outline-secondary" asp-controller="Plan" asp-action="Index">@Url.Icono("arrow-left") Mis áreas</a> }
+        </div>
+    </div>
+
+    @if (l is null) { <div class="alert alert-warning">@Url.Icono("alert")<div>No hay una convocatoria.</div></div> }
+    else
+    {
+        var (estadoTxt, estadoClase) = Estado(l.Estado);
+        <section class="kpi-grid" aria-label="Resumen">
+            <div class="kpi" style="--acento: var(--nqn-turquesa)"><span class="kpi__icon">@Url.Icono("layers")</span><span><span class="kpi__label d-block">Estado del plan</span><span class="d-block mt-1"><span class="chip @estadoClase">@estadoTxt</span></span></span></div>
+            <div class="kpi" style="--acento: var(--nqn-amarillo)"><span class="kpi__icon">@Url.Icono("calendar")</span><span><span class="kpi__label d-block">Límite de presentación</span>
+                <span class="kpi__value d-block" style="font-size:1.25rem">@Formato.Fecha(l.LimiteDeLaEmpresa)</span>
+                <span class="small text-muted">@(l.LimiteDeLaEmpresa > l.LimiteGeneral ? $"con prórroga (general: {Formato.Fecha(l.LimiteGeneral)})" : l.LimiteDeLaEmpresa < hoy ? "vencido" : "general de la convocatoria")</span></span></div>
+            <div class="kpi" style="--acento: var(--nqn-coral)"><span class="kpi__icon">@Url.Icono("clock")</span><span><span class="kpi__label d-block">Próximo vencimiento</span>
+                <span class="kpi__value d-block" style="font-size:1.25rem">@(l.ProximoVencimiento is { } pv ? Formato.Fecha(pv) : "—")</span>
+                <span class="small text-muted">@(l.ProximoVencimiento is null ? "sin plazos abiertos" : l.ProximoVencimiento < hoy ? "plazo vencido, sin respuesta" : "respuesta de la empresa")</span></span></div>
+            <div class="kpi" style="--acento: var(--nqn-verde)"><span class="kpi__icon">@Url.Icono("mail")</span><span><span class="kpi__label d-block">Notas sin respuesta</span><span class="kpi__value d-block">@l.NotasPendientes</span></span></div>
+        </section>
+
+        @if (Model.EsAdministrador)
+        {
+            <div class="panel mb-4"><div class="d-flex flex-wrap gap-2 align-items-center">
+                <strong class="me-2">Registrar:</strong>
+                <button type="button" class="btn btn-primary btn-sm" data-registrar="NotaEnviada">@Url.Icono("mail") Nota o mail enviado</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-registrar="RespuestaEmpresa">Respuesta de la empresa</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-registrar="ProrrogaSolicitada">Prórroga solicitada</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-registrar="ProrrogaOtorgada">Otorgar prórroga</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-registrar="Observado">Observar el plan</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-registrar="Aprobado">Aprobar el plan</button>
+                <button type="button" class="btn btn-outline-danger btn-sm ms-auto" data-bs-toggle="modal" data-bs-target="#modal-rechazo">@Url.Icono("x") Rechazar el plan</button>
+            </div></div>
+        }
+
+        @if (l.Movimientos.Count == 0)
+        {
+            <div class="empty">@Url.Icono("mail")<p>Todavía no hay movimientos con esta empresa en la convocatoria @c?.Anio.</p></div>
+        }
+        else
+        {
+            <ol class="linea" aria-label="Movimientos, del más reciente al más antiguo">
+                @foreach (var m in l.Movimientos)
+                {
+                    var v = Visual(m.Tipo);
+                    <li class="linea__item linea__item--@v.Color">
+                        <span class="linea__punto" aria-hidden="true">@Url.Icono(v.Icono)</span>
+                        <div class="linea__cuerpo">
+                            <div class="linea__cab">
+                                <span class="linea__tipo linea__tipo--@v.Color">@v.Texto</span>
+                                @if (m.Estado is not null)
+                                {
+                                    <span class="chip @(m.Estado == "Respondida" ? "chip--ok" : m.Estado == "Vencida" ? "chip--danger" : "chip--warn")">@m.Estado</span>
+                                }
+                                @if (m.NombreArea is not null) { <span class="chip chip--tag">@m.NombreArea</span> }
+                                @if (m.Origen == "Sistema") { <span class="small text-muted">automático</span> }
+                                @if (Model.EsAdministrador && m.Origen == "Registro" && !m.Visible) { <span class="chip chip--tag" title="La empresa no ve este movimiento">Interno</span> }
+                                <span class="linea__fecha">@Formato.Fecha(m.Fecha)</span>
+                            </div>
+                            <div class="linea__titulo">@m.Titulo</div>
+                            @if (!string.IsNullOrWhiteSpace(m.Detalle)) { <div class="linea__detalle">@m.Detalle</div> }
+                            <div class="linea__meta">
+                                <span>@m.Usuario</span>
+                                @if (m.NumeroGde is not null) { <span>GDE: <strong>@m.NumeroGde</strong></span> }
+                                @if (m.PlazoHasta is { } pl)
+                                {
+                                    <span>@(m.Tipo == "ProrrogaOtorgada" ? "Nuevo plazo" : m.Tipo == "Rechazado" ? "Puede volver a presentar hasta" : "Plazo") <strong>@Formato.Fecha(pl)</strong></span>
+                                }
+                                @if (m.AdjuntoNombre is not null) { <a asp-action="Adjunto" asp-route-id="@m.AdjuntoId">@Url.Icono("paperclip") @m.AdjuntoNombre</a> }
+                                @if (!Model.EsEmpresa && m.MailEnviado) { <span title="@m.MailDestinatarios">@Url.Icono("mail") Mail enviado</span> }
+                                @if (!Model.EsEmpresa && m.MailError is not null) { <span class="text-danger" title="@m.MailError">Mail no enviado</span> }
+                            </div>
+                        </div>
+                    </li>
+                }
+            </ol>
+        }
+    }
+</div>
+
+@if (Model.EsAdministrador && Model.Linea is not null)
+{
+    <div class="modal fade" id="modal-registro" tabindex="-1" aria-labelledby="registro-titulo" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg"><div class="modal-content">
+            <form asp-action="Registrar" method="post" enctype="multipart/form-data" data-una-vez>
+                <input type="hidden" name="cuit" value="@Model.Cuit" /><input type="hidden" name="anio" value="@c?.Anio" />
+                <div class="modal-header"><h2 class="modal-title fs-5" id="registro-titulo">Registrar movimiento</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label" for="r-tipo">Tipo de movimiento</label>
+                            <select class="form-select" id="r-tipo" name="tipo">
+                                <option value="NotaEnviada">Nota o mail enviado a la empresa</option>
+                                <option value="RespuestaEmpresa">Respuesta de la empresa</option>
+                                <option value="ProrrogaSolicitada">Prórroga solicitada por la empresa</option>
+                                <option value="ProrrogaOtorgada">Prórroga otorgada (nuevo límite para presentar el plan)</option>
+                                <option value="Observado">Plan observado</option>
+                                <option value="Aprobado">Plan aprobado</option>
+                            </select></div>
+                        <div class="col-md-6"><label class="form-label" for="r-gde">Nota o expediente de GDE <span class="text-muted">(opcional)</span></label>
+                            <input class="form-control" id="r-gde" name="numeroGde" maxlength="80" placeholder="NO-2027-00000000-NEU-…" /></div>
+                        <div class="col-12"><label class="form-label" for="r-asunto">Asunto</label>
+                            <input class="form-control" id="r-asunto" name="asunto" maxlength="200" required placeholder="Ej.: Solicitud de ampliación de la fundamentación del flujo de fondos" /></div>
+                        <div class="col-12"><label class="form-label" for="r-detalle">Detalle <span class="text-muted">(opcional)</span></label>
+                            <textarea class="form-control" id="r-detalle" name="detalle" rows="4" maxlength="4000"></textarea></div>
+                        <div class="col-md-6" data-si="NotaEnviada ProrrogaOtorgada"><label class="form-label" for="r-plazo" id="r-plazo-et">Plazo de respuesta</label>
+                            <input class="form-control" type="date" id="r-plazo" name="plazoHasta" /><div class="form-text" id="r-plazo-ayuda">Hasta cuándo tiene que contestar la empresa. Sin fecha, la nota no queda como pendiente.</div></div>
+                        <div class="col-md-6" data-si="RespuestaEmpresa ProrrogaOtorgada"><label class="form-label" for="r-resp">Responde a</label>
+                            <select class="form-select" id="r-resp" name="respondeA"><option value="">(ninguna en particular)</option>
+                                @foreach (var p in Model.Pendientes) { <option value="@p.Id">@Formato.Fecha(p.Fecha) · @(ComunicacionService.Etiqueta(p.Tipo)): @p.Asunto</option> }
+                            </select></div>
+                        <div class="col-md-6"><label class="form-label" for="r-area">Área <span class="text-muted">(opcional)</span></label>
+                            <select class="form-select" id="r-area" name="idBloque"><option value="">Toda la empresa</option>
+                                @foreach (var a in Model.Areas) { <option value="@a.IdBloque">@a.NombreArea</option> }
+                            </select></div>
+                        <div class="col-md-6"><label class="form-label" for="r-archivo">Documento adjunto <span class="text-muted">(la nota, la respuesta…)</span></label>
+                            <input class="form-control" type="file" id="r-archivo" name="archivo" accept=".pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg,.zip" /></div>
+                        <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="r-visible" name="visible" value="true" checked /><input type="hidden" name="visible" value="false" />
+                            <label class="form-check-label" for="r-visible">La empresa lo ve en su pantalla</label></div></div>
+                        <div class="col-12" data-si="NotaEnviada ProrrogaOtorgada Observado Aprobado">
+                            <div class="form-check"><input class="form-check-input" type="checkbox" id="r-mail" name="enviarMail" value="true" /><input type="hidden" name="enviarMail" value="false" />
+                                <label class="form-check-label" for="r-mail"><strong>Enviar también por mail desde el sistema</strong></label></div>
+                            <div class="form-text">Siempre se registra. El mail es opcional: usalo cuando no se haya mandado ya por GDE o por correo común.</div>
+                            <div id="r-mail-datos" class="mt-2" hidden>
+                                <div class="small mb-1">Se le avisa a: @(Model.Destinatarios.Count == 0 ? "ninguna casilla conocida de la empresa" : string.Join(", ", Model.Destinatarios)) <span class="text-muted">(y a la Subsecretaría, en copia)</span></div>
+                                <label class="form-label small" for="r-dest">Otras casillas (separadas por coma)</label>
+                                <input class="form-control form-control-sm" id="r-dest" name="destinatarios" maxlength="500" placeholder="contacto@empresa.com" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary">Registrar</button></div>
+            </form>
+        </div></div>
+    </div>
+
+    <div class="modal fade" id="modal-rechazo" tabindex="-1" aria-labelledby="rechazo-titulo" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+            <form asp-action="Rechazar" method="post" enctype="multipart/form-data" data-una-vez data-confirmar="Se rechaza el plan de esta empresa. ¿Continuar?">
+                <input type="hidden" name="cuit" value="@Model.Cuit" /><input type="hidden" name="anio" value="@c?.Anio" />
+                <div class="modal-header"><h2 class="modal-title fs-5" id="rechazo-titulo">Rechazar el plan</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label" for="x-motivo">Motivo</label>
+                        <textarea class="form-control" id="x-motivo" name="motivo" rows="4" minlength="10" maxlength="4000" required placeholder="Explicá por qué se rechaza y qué tiene que corregir la empresa."></textarea></div>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label" for="x-plazo">Puede volver a presentar hasta</label><input class="form-control" type="date" id="x-plazo" name="plazoHasta" required /></div>
+                        <div class="col-md-6"><label class="form-label" for="x-gde">Nota de GDE <span class="text-muted">(opcional)</span></label><input class="form-control" id="x-gde" name="numeroGde" maxlength="80" /></div>
+                        <div class="col-12"><label class="form-label" for="x-archivo">Documento adjunto <span class="text-muted">(opcional)</span></label><input class="form-control" type="file" id="x-archivo" name="archivo" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.zip" /></div>
+                    </div>
+                    <div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="x-habilitar" name="habilitar" value="true" checked /><input type="hidden" name="habilitar" value="false" />
+                        <label class="form-check-label" for="x-habilitar">Habilitar a la empresa para rectificar todas sus áreas hasta esa fecha</label></div>
+                    <div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="x-mail" name="enviarMail" value="true" /><input type="hidden" name="enviarMail" value="false" />
+                        <label class="form-check-label" for="x-mail">Avisarle también por mail desde el sistema</label></div>
+                    <div id="x-mail-datos" class="mt-2" hidden>
+                        <div class="small mb-1">Se le avisa a: @(Model.Destinatarios.Count == 0 ? "ninguna casilla conocida de la empresa" : string.Join(", ", Model.Destinatarios)) <span class="text-muted">(y a la Subsecretaría, en copia)</span></div>
+                        <input class="form-control form-control-sm" name="destinatarios" maxlength="500" placeholder="Otras casillas, separadas por coma" />
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger">Rechazar el plan</button></div>
+            </form>
+        </div></div>
+    </div>
+}
+
+@section Scripts { <script src="~/js/comunicaciones.js" asp-append-version="true"></script> }

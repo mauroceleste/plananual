@@ -11,6 +11,11 @@ public sealed class MisAreasVm
 {
     public Ciclo? Ciclo { get; set; }
     public List<FilaArea> Filas { get; set; } = [];
+    /// <summary>Límite de presentación de la empresa: el general o la prórroga que se le otorgó.</summary>
+    public DateOnly? LimiteEmpresa { get; set; }
+    /// <summary>Últimos movimientos registrados por la Subsecretaría con la empresa (lo que la empresa puede ver).</summary>
+    public List<MovimientoVm> Novedades { get; set; } = [];
+    public int NotasPendientes { get; set; }
     /// <summary>Qué le falta a cada borrador (por id de presentación) para entrar en la presentación final.</summary>
     public Dictionary<long, List<string>> Pendientes { get; set; } = [];
     public string? ErrorServicio { get; set; }
@@ -85,6 +90,8 @@ public sealed class SeguimientoVm
     /// <summary>Si la convocatoria que se mira es la abierta (solo en esa se puede asistir a una empresa).</summary>
     public bool EsVigente { get; set; }
     public List<EmpresaSeguimiento> Empresas { get; set; } = [];
+    /// <summary>Notas enviadas a cada empresa (por CUIT) que todavía no contestó.</summary>
+    public Dictionary<string, int> NotasPendientes { get; set; } = [];
     public List<Presentacion> Recientes { get; set; } = [];
     public string? ErrorServicio { get; set; }
 }
@@ -130,4 +137,19 @@ public sealed class CorreoVm
     public List<string> ListaPrueba { get; set; } = [];
     public string? PublicOrigin { get; set; }
     public string MiMail { get; set; } = "";
+}
+
+/// <summary>Pantalla de comunicaciones de una empresa: línea de tiempo y, para Administración, los formularios.</summary>
+public sealed class ComunicacionesVm
+{
+    public string Cuit { get; init; } = "";
+    public Ciclo? Ciclo { get; init; }
+    public List<Ciclo> Convocatorias { get; init; } = [];
+    public LineaDeTiempo? Linea { get; init; }
+    public bool EsAdministrador { get; init; }
+    public bool EsEmpresa { get; init; }
+    /// <summary>Notas y pedidos de prórroga sin contestar: se elige a cuál responde un movimiento nuevo.</summary>
+    public List<Comunicacion> Pendientes { get; set; } = [];
+    public List<string> Destinatarios { get; set; } = [];
+    public List<(int IdBloque, string NombreArea)> Areas { get; set; } = [];
 }

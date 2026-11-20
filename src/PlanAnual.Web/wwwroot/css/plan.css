@@ -207,3 +207,27 @@
 .hist-valor { max-width: 280px; font-size: .85rem; overflow-wrap: anywhere; white-space: pre-wrap; }
 .hist-valor del { color: var(--danger); opacity: .85; }
 .hist-valor ins { color: var(--ok-text); text-decoration: none; font-weight: 600; }
+
+/* ---- Comunicaciones: línea de tiempo del ida y vuelta con la empresa ---- */
+.linea { list-style: none; margin: 0; padding: 0 0 0 .25rem; position: relative; }
+.linea::before { content: ""; position: absolute; left: 1.2rem; top: .6rem; bottom: .6rem; width: 2px; background: var(--border); }
+.linea__item { position: relative; display: flex; gap: 1rem; padding: 0 0 1.1rem; }
+.linea__punto {
+    flex: none; z-index: 1; width: 2.1rem; height: 2.1rem; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface); border: 2px solid var(--punto, var(--border-strong)); color: var(--punto, var(--text-2));
+}
+.linea__punto .icon { font-size: 1rem; }
+.linea__item--azul { --punto: var(--azul-500); }
+.linea__item--turquesa { --punto: var(--nqn-turquesa); }
+.linea__item--amarillo { --punto: #c99a00; }
+.linea__item--verde { --punto: var(--nqn-verde); }
+.linea__item--coral { --punto: var(--nqn-coral); }
+.linea__item--gris { --punto: var(--muted); }
+.linea__cuerpo { flex: 1 1 auto; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem 1rem; }
+.linea__cab { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .25rem; }
+.linea__tipo { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--punto, var(--text-2)); }
+.linea__fecha { margin-left: auto; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.linea__titulo { font-weight: 700; }
+.linea__detalle { margin-top: .25rem; white-space: pre-wrap; color: var(--text-2); font-size: .92rem; }
+.linea__meta { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin-top: .5rem; font-size: .82rem; color: var(--muted); }
+.linea__meta strong { color: var(--text-2); }

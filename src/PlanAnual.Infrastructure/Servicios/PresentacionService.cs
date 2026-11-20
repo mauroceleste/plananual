@@ -331,8 +331,14 @@ public sealed class PresentacionService(PlanAnualDbContext db, IMailSender mail,
         await ExigirEditableAsync(p, u);
         var obs = Validador.Validar(p, p.Anexos.Select(a => new AnexoTipoPresentado(a.Tipo)).ToList());
         if (obs.Any(o => o.EsError)) throw new OperacionInvalida("Hay errores que corregir antes de enviar.");
-        if (p.Ciclo is { } c && DateOnly.FromDateTime(DateTime.Today) > c.LimiteVigente)
-            p.Observaciones = $"Presentada fuera de plazo (vencía el {c.LimiteVigente:dd/MM/yyyy}).";
+        if (p.Ciclo is { } c)
+        {
+            // El límite de la empresa: el general o la prórroga más lejana que se le otorgó (se registra en Comunicaciones).
+            var prorrogas = await db.Comunicaciones.AsNoTracking().Where(x => x.CicloId == p.CicloId && x.Cuit == p.Cuit && x.Tipo == TipoComunicacion.ProrrogaOtorgada && x.PlazoHasta != null)
+                .Select(x => x.PlazoHasta!.Value).ToListAsync();
+            var limite = prorrogas.Append(c.LimiteVigente).Max();
+            if (DateOnly.FromDateTime(DateTime.Today) > limite) p.Observaciones = $"Presentada fuera de plazo (vencía el {limite:dd/MM/yyyy}).";
+        }
 
         var anteriores = await db.Presentaciones.Where(x => x.CicloId == p.CicloId && x.IdBloque == p.IdBloque && x.Cuit == p.Cuit && x.Estado == EstadoPresentacion.Enviada).ToListAsync();
         foreach (var a in anteriores) a.Estado = EstadoPresentacion.Reemplazada;
