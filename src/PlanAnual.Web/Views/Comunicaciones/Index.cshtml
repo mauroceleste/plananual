@@ -119,11 +119,11 @@
                                 <span>@m.Usuario</span>
                                 @if (m.NumeroGde is not null)
                                 {
-                                    <span>GDE: <strong>@m.NumeroGde</strong></span>
                                     @if (!Model.EsEmpresa && PlanAnual.Infrastructure.Gde.GdeClient.TienePdf(m.NumeroGde))
                                     {
-                                        <a href="@Url.Content("~/Plan/DocumentoGde")?numero=@Uri.EscapeDataString(m.NumeroGde)" target="_blank" rel="noopener" title="Abre el PDF desde GDE (puede tardar unos segundos)">@Url.Icono("download") Ver en GDE</a>
+                                        <span>GDE: <a href="@Url.Content("~/Plan/DocumentoGde")?numero=@Uri.EscapeDataString(m.NumeroGde)" target="_blank" rel="noopener" title="Abrir el PDF desde GDE (puede tardar unos segundos)"><strong>@m.NumeroGde</strong> @Url.Icono("pdf")</a></span>
                                     }
+                                    else { <span>GDE: <strong>@m.NumeroGde</strong></span> }
                                 }
                                 @if (m.PlazoHasta is { } pl)
                                 {

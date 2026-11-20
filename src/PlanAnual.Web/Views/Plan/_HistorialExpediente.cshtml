@@ -42,12 +42,12 @@ else
     else
     {
         <div class="table-responsive"><table class="table table-sm table-striped" data-limitada>
-            <thead><tr><th>Número</th><th>Tipo</th><th>Referencia</th><th>Fecha</th><th></th></tr></thead>
+            <thead><tr><th>Número</th><th>Tipo</th><th>Referencia</th><th>Fecha</th></tr></thead>
             <tbody>
             @for (var i = 0; i < docs.Count; i++)
             {
                 var x = docs[i];
-                <tr data-fila class="@(i >= 10 ? "d-none" : "")"><td class="text-nowrap">@x.Numero</td><td>@x.Tipo</td><td>@x.Referencia</td><td class="text-nowrap">@x.Fecha</td><td class="text-nowrap">@if (GdeClient.TienePdf(x.Numero)) { <a href="@Url.Content("~/Plan/DocumentoGde")?numero=@Uri.EscapeDataString(x.Numero!)" target="_blank" rel="noopener" title="Abre el PDF desde GDE (puede tardar unos segundos)">Descargar</a> }</td></tr>
+                <tr data-fila class="@(i >= 10 ? "d-none" : "")"><td class="text-nowrap">@if (GdeClient.TienePdf(x.Numero)) { <a href="@Url.Content("~/Plan/DocumentoGde")?numero=@Uri.EscapeDataString(x.Numero!)" target="_blank" rel="noopener" title="Abrir el PDF desde GDE (puede tardar unos segundos)">@x.Numero @Url.Icono("pdf")</a> } else { @x.Numero }</td><td>@x.Tipo</td><td>@x.Referencia</td><td class="text-nowrap">@x.Fecha</td></tr>
             }
             </tbody></table>
             @if (docs.Count > 10) { <button type="button" class="btn btn-ghost btn-sm" data-mostrar-todas>Mostrar todas (@docs.Count)</button> }
