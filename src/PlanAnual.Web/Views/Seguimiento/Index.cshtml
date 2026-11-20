@@ -32,7 +32,13 @@
                 <tr><td data-label="Empresa"><span class="t-title">@e.Razon</span></td><td data-label="CUIT" class="t-num">@e.Cuit</td>
                     <td data-label="Áreas" class="t-num text-end">@e.Bloques</td><td data-label="Enviadas" class="t-num text-end">@e.Enviadas</td><td data-label="En borrador" class="t-num text-end">@e.Borradores</td>
                     <td data-label="Estado"><span class="chip @Chip(e.Estado)">@e.Estado</span></td>
-                    <td data-label="Comunicaciones" class="t-actions"><a class="btn btn-ghost btn-sm" asp-controller="Comunicaciones" asp-action="Index" asp-route-cuit="@e.Cuit" asp-route-anio="@c?.Anio">@Url.Icono("mail") Ver @if (Model.NotasPendientes.GetValueOrDefault(e.Cuit) is > 0 and var pend) { <span class="badge rounded-pill text-bg-warning ms-1" title="Notas sin respuesta">@pend</span> }</a></td>
+                    <td data-label="Comunicaciones" class="t-actions">
+                        @{ var act = Model.Actividad.GetValueOrDefault(e.Cuit); }
+                        <a class="btn btn-ghost btn-sm" asp-controller="Comunicaciones" asp-action="Index" asp-route-cuit="@e.Cuit" asp-route-anio="@c?.Anio">@Url.Icono("mail") Ver
+                            @if (act is { ProrrogasPorResolver: > 0 }) { <span class="badge rounded-pill text-bg-danger ms-1" title="Pedidos de prórroga por resolver">@act.ProrrogasPorResolver</span> }
+                            @if (act is { NotasSinRespuesta: > 0 }) { <span class="badge rounded-pill text-bg-warning ms-1" title="Notas enviadas sin respuesta">@act.NotasSinRespuesta</span> }
+                            @if (act is { RespuestasRecientes: > 0 }) { <span class="badge rounded-pill text-bg-success ms-1" title="Respuestas de la empresa en los últimos 7 días">@act.RespuestasRecientes</span> }
+                        </a></td>
                     @if (esAdmin) {<td class="t-actions"><a class="btn btn-ghost btn-sm" asp-controller="Plan" asp-action="Index" asp-route-cuit="@e.Cuit">@Url.Icono("edit") Asistir</a></td>}</tr>
             }
             </tbody>

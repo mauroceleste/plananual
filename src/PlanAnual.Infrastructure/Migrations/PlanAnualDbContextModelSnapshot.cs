@@ -234,6 +234,10 @@ namespace PlanAnual.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("plazo_hasta");
 
+                    b.Property<bool>("PorLaEmpresa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("por_la_empresa");
+
                     b.Property<string>("RazonSocial")
                         .IsRequired()
                         .HasMaxLength(150)

@@ -91,7 +91,7 @@ public sealed class SeguimientoVm
     public bool EsVigente { get; set; }
     public List<EmpresaSeguimiento> Empresas { get; set; } = [];
     /// <summary>Notas enviadas a cada empresa (por CUIT) que todavía no contestó.</summary>
-    public Dictionary<string, int> NotasPendientes { get; set; } = [];
+    public Dictionary<string, ActividadEmpresa> Actividad { get; set; } = [];
     public List<Presentacion> Recientes { get; set; } = [];
     public string? ErrorServicio { get; set; }
 }

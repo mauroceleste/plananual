@@ -17,7 +17,7 @@ public class SeguimientoController(PresentacionService svc, ILegajosClient legaj
     {
         var vm = new SeguimientoVm { Ciclo = await svc.CicloParaConsultaAsync(anio), Convocatorias = await svc.CiclosAsync() };
         vm.EsVigente = vm.Ciclo is not null && vm.Ciclo.Id == (await svc.CicloAbiertoAsync())?.Id;
-        if (vm.Ciclo is not null) vm.NotasPendientes = await comunicaciones.PendientesPorEmpresaAsync(vm.Ciclo.Id);
+        if (vm.Ciclo is not null) vm.Actividad = await comunicaciones.ActividadPorEmpresaAsync(vm.Ciclo.Id);
         try
         {
             var bloques = await legajos.TodosLosBloquesAsync();

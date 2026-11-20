@@ -114,6 +114,56 @@ public class ComunicacionesController(ComunicacionService svc, PresentacionServi
         return RedirectToAction(nameof(Index), new { cuit = c ?? cuit, anio });
     }
 
+    /// <summary>La empresa contesta una nota de la Subsecretaría (texto y, si quiere, un documento).</summary>
+    [HttpPost("Comunicaciones/Responder")]
+    [RequestSizeLimit(60_000_000)]
+    public async Task<IActionResult> Responder(string? cuit, int? anio, long notaId, string? detalle, string? numeroGde, IFormFile? archivo = null)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Empresa) return Forbid();
+        var c = CuitDe(cuit, u);
+        try
+        {
+            if (c is null) throw new OperacionInvalida("No encontramos tu empresa.");
+            var ciclo = await presentaciones.CicloParaConsultaAsync(anio) ?? throw new OperacionInvalida("No hay una convocatoria.");
+            var adj = await GuardarAdjuntoAsync(archivo, ciclo.Id);
+            try
+            {
+                await svc.ResponderAsync(u, ciclo, c, notaId, detalle, numeroGde, this.Absoluta(config, nameof(Index), "Comunicaciones", new { cuit = c, anio = ciclo.Anio }), adj?.Nombre, adj?.Ruta, adj?.Tamano, adj?.Sha);
+                TempData["Mensaje"] = "Enviamos tu respuesta a la Subsecretaría. Queda registrada acá.";
+            }
+            catch { BorrarAdjunto(adj?.Ruta); throw; }
+        }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Index), new { cuit = c ?? cuit, anio });
+    }
+
+    /// <summary>La empresa pide una prórroga para presentar el plan.</summary>
+    [HttpPost("Comunicaciones/SolicitarProrroga")]
+    [RequestSizeLimit(60_000_000)]
+    public async Task<IActionResult> SolicitarProrroga(string? cuit, int? anio, string? motivo, DateOnly? hastaCuando, IFormFile? archivo = null)
+    {
+        var u = User.ToSesion();
+        if (u.Rol != Rol.Empresa) return Forbid();
+        var c = CuitDe(cuit, u);
+        try
+        {
+            if (c is null) throw new OperacionInvalida("No encontramos tu empresa.");
+            var ciclo = await presentaciones.CicloParaConsultaAsync(anio) ?? throw new OperacionInvalida("No hay una convocatoria.");
+            var adj = await GuardarAdjuntoAsync(archivo, ciclo.Id);
+            try
+            {
+                await svc.SolicitarProrrogaAsync(u, ciclo, c, motivo, hastaCuando, this.Absoluta(config, nameof(Index), "Comunicaciones", new { cuit = c, anio = ciclo.Anio }), adj?.Nombre, adj?.Ruta, adj?.Tamano, adj?.Sha);
+                TempData["Mensaje"] = "Registramos tu pedido de prórroga y se lo avisamos a la Subsecretaría. La respuesta va a aparecer en esta pantalla.";
+            }
+            catch { BorrarAdjunto(adj?.Ruta); throw; }
+        }
+        catch (OperacionInvalida ex) { TempData["Error"] = ex.Message; }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return RedirectToAction(nameof(Index), new { cuit = c ?? cuit, anio });
+    }
+
     [HttpGet("Comunicaciones/Adjunto/{id:long}")]
     public async Task<IActionResult> Adjunto(long id)
     {

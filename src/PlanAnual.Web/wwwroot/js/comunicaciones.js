@@ -30,3 +30,33 @@
     var xm = document.getElementById('x-mail'), xd = document.getElementById('x-mail-datos');
     if (xm) xm.addEventListener('change', function () { xd.hidden = !xm.checked; });
 })();
+
+// Empresa: «Responder» abre el formulario con la nota elegida.
+(function () {
+    'use strict';
+    var el = document.getElementById('modal-responder');
+    if (!el) return;
+    var modal = new bootstrap.Modal(el);
+    document.querySelectorAll('[data-responder]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.getElementById('resp-nota').value = b.dataset.responder;
+            document.getElementById('resp-asunto').textContent = 'Nota: ' + b.dataset.asunto;
+            modal.show();
+        });
+    });
+})();
+
+// Administración: una nota solo puede contestar un pedido de prórroga; se muestran solo esas opciones.
+(function () {
+    'use strict';
+    var tipo = document.getElementById('r-tipo'), resp = document.getElementById('r-resp');
+    if (!tipo || !resp) return;
+    function filtrar() {
+        Array.prototype.forEach.call(resp.options, function (o) {
+            if (!o.value) return;
+            o.hidden = tipo.value === 'NotaEnviada' && o.dataset.tipo !== 'ProrrogaSolicitada';
+        });
+        if (resp.selectedOptions[0] && resp.selectedOptions[0].hidden) resp.value = '';
+    }
+    tipo.addEventListener('change', filtrar); filtrar();
+})();

@@ -235,6 +235,8 @@ public class Comunicacion
     public long? RespondeA { get; set; }
     /// <summary>La empresa ve este movimiento en su pantalla (por defecto sí).</summary>
     public bool VisibleParaEmpresa { get; set; } = true;
+    /// <summary>Lo cargó la propia empresa desde su pantalla (respuesta a una nota o pedido de prórroga), no Administración.</summary>
+    public bool PorLaEmpresa { get; set; }
     public int UsuarioId { get; set; }
     public string Usuario { get; set; } = "";
 

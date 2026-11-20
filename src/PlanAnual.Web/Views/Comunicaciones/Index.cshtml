@@ -76,6 +76,18 @@
             </div></div>
         }
 
+        @if (Model.EsEmpresa)
+        {
+            var tienePedido = l.Movimientos.Any(m => m.Tipo == "ProrrogaSolicitada" && m.Estado == "Pendiente");
+            <div class="panel mb-4"><div class="d-flex flex-wrap gap-2 align-items-center">
+                <span>@(l.Movimientos.Any(m => m.Tipo == "NotaEnviada" && m.Estado is "Pendiente" or "Vencida")
+                    ? "Tenés notas de la Subsecretaría esperando respuesta: usá «Responder» en cada una."
+                    : "¿Necesitás más tiempo para presentar el plan?")</span>
+                @if (tienePedido) { <span class="chip chip--warn ms-auto">Pedido de prórroga pendiente de respuesta</span> }
+                else if (l.Estado is not (EstadoEmpresa.Aprobado or EstadoEmpresa.Rechazado)) { <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" data-bs-toggle="modal" data-bs-target="#modal-prorroga">@Url.Icono("clock") Solicitar prórroga</button> }
+            </div></div>
+        }
+
         @if (l.Movimientos.Count == 0)
         {
             <div class="empty">@Url.Icono("mail")<p>Todavía no hay movimientos con esta empresa en la convocatoria @c?.Anio.</p></div>
@@ -93,10 +105,11 @@
                                 <span class="linea__tipo linea__tipo--@v.Color">@v.Texto</span>
                                 @if (m.Estado is not null)
                                 {
-                                    <span class="chip @(m.Estado == "Respondida" ? "chip--ok" : m.Estado == "Vencida" ? "chip--danger" : "chip--warn")">@m.Estado</span>
+                                    <span class="chip @(m.Estado is "Respondida" or "Resuelta" ? "chip--ok" : m.Estado == "Vencida" ? "chip--danger" : "chip--warn")">@m.Estado</span>
                                 }
                                 @if (m.NombreArea is not null) { <span class="chip chip--tag">@m.NombreArea</span> }
                                 @if (m.Origen == "Sistema") { <span class="small text-muted">automático</span> }
+                                @if (m.PorLaEmpresa && !Model.EsEmpresa) { <span class="chip chip--tag" title="Lo escribió la empresa desde su pantalla">Cargado por la empresa</span> }
                                 @if (Model.EsAdministrador && m.Origen == "Registro" && !m.Visible) { <span class="chip chip--tag" title="La empresa no ve este movimiento">Interno</span> }
                                 <span class="linea__fecha">@Formato.Fecha(m.Fecha)</span>
                             </div>
@@ -107,12 +120,16 @@
                                 @if (m.NumeroGde is not null) { <span>GDE: <strong>@m.NumeroGde</strong></span> }
                                 @if (m.PlazoHasta is { } pl)
                                 {
-                                    <span>@(m.Tipo == "ProrrogaOtorgada" ? "Nuevo plazo" : m.Tipo == "Rechazado" ? "Puede volver a presentar hasta" : "Plazo") <strong>@Formato.Fecha(pl)</strong></span>
+                                    <span>@(m.Tipo == "ProrrogaOtorgada" ? "Nuevo plazo" : m.Tipo == "Rechazado" ? "Puede volver a presentar hasta" : m.Tipo == "ProrrogaSolicitada" ? "Pide hasta" : "Plazo") <strong>@Formato.Fecha(pl)</strong></span>
                                 }
                                 @if (m.AdjuntoNombre is not null) { <a asp-action="Adjunto" asp-route-id="@m.AdjuntoId">@Url.Icono("paperclip") @m.AdjuntoNombre</a> }
                                 @if (!Model.EsEmpresa && m.MailEnviado) { <span title="@m.MailDestinatarios">@Url.Icono("mail") Mail enviado</span> }
                                 @if (!Model.EsEmpresa && m.MailError is not null) { <span class="text-danger" title="@m.MailError">Mail no enviado</span> }
                             </div>
+                            @if (Model.EsEmpresa && m.Tipo == "NotaEnviada" && m.Estado is "Pendiente" or "Vencida")
+                            {
+                                <div class="mt-2"><button type="button" class="btn btn-primary btn-sm" data-responder="@m.Id" data-asunto="@m.Titulo">@Url.Icono("mail") Responder</button></div>
+                            }
                         </div>
                     </li>
                 }
@@ -147,9 +164,9 @@
                             <textarea class="form-control" id="r-detalle" name="detalle" rows="4" maxlength="4000"></textarea></div>
                         <div class="col-md-6" data-si="NotaEnviada ProrrogaOtorgada"><label class="form-label" for="r-plazo" id="r-plazo-et">Plazo de respuesta</label>
                             <input class="form-control" type="date" id="r-plazo" name="plazoHasta" /><div class="form-text" id="r-plazo-ayuda">Hasta cuándo tiene que contestar la empresa. Sin fecha, la nota no queda como pendiente.</div></div>
-                        <div class="col-md-6" data-si="RespuestaEmpresa ProrrogaOtorgada"><label class="form-label" for="r-resp">Responde a</label>
+                        <div class="col-md-6" data-si="RespuestaEmpresa ProrrogaOtorgada NotaEnviada"><label class="form-label" for="r-resp">Responde a <span class="text-muted">(opcional)</span></label>
                             <select class="form-select" id="r-resp" name="respondeA"><option value="">(ninguna en particular)</option>
-                                @foreach (var p in Model.Pendientes) { <option value="@p.Id">@Formato.Fecha(p.Fecha) · @(ComunicacionService.Etiqueta(p.Tipo)): @p.Asunto</option> }
+                                @foreach (var p in Model.Pendientes) { <option value="@p.Id" data-tipo="@p.Tipo">@Formato.Fecha(p.Fecha) · @(ComunicacionService.Etiqueta(p.Tipo)): @p.Asunto</option> }
                             </select></div>
                         <div class="col-md-6"><label class="form-label" for="r-area">Área <span class="text-muted">(opcional)</span></label>
                             <select class="form-select" id="r-area" name="idBloque"><option value="">Toda la empresa</option>
@@ -204,4 +221,47 @@
     </div>
 }
 
+
+@if (Model.EsEmpresa && Model.Linea is not null)
+{
+    <div class="modal fade" id="modal-responder" tabindex="-1" aria-labelledby="responder-titulo" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+            <form asp-action="Responder" method="post" enctype="multipart/form-data" data-una-vez>
+                <input type="hidden" name="cuit" value="@Model.Cuit" /><input type="hidden" name="anio" value="@Model.Ciclo?.Anio" /><input type="hidden" name="notaId" id="resp-nota" />
+                <div class="modal-header"><h2 class="modal-title fs-5" id="responder-titulo">Responder la nota</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <div class="modal-body">
+                    <p class="small text-muted" id="resp-asunto"></p>
+                    <div class="mb-3"><label class="form-label" for="resp-detalle">Tu respuesta</label>
+                        <textarea class="form-control" id="resp-detalle" name="detalle" rows="5" minlength="10" maxlength="4000" required></textarea></div>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label" for="resp-gde">Nota o expediente de GDE <span class="text-muted">(si la presentaste por GDE)</span></label><input class="form-control" id="resp-gde" name="numeroGde" maxlength="80" /></div>
+                        <div class="col-md-6"><label class="form-label" for="resp-archivo">Documento adjunto <span class="text-muted">(opcional)</span></label><input class="form-control" type="file" id="resp-archivo" name="archivo" accept=".pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg,.zip" /></div>
+                    </div>
+                    <p class="form-text mt-3">Se registra acá y se le avisa a la Subsecretaría por mail. Formatos: PDF, Excel, Word, imágenes, ZIP (hasta 25 MB).</p>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary">Enviar respuesta</button></div>
+            </form>
+        </div></div>
+    </div>
+
+    <div class="modal fade" id="modal-prorroga" tabindex="-1" aria-labelledby="prorroga-titulo" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+            <form asp-action="SolicitarProrroga" method="post" enctype="multipart/form-data" data-una-vez>
+                <input type="hidden" name="cuit" value="@Model.Cuit" /><input type="hidden" name="anio" value="@Model.Ciclo?.Anio" />
+                <div class="modal-header"><h2 class="modal-title fs-5" id="prorroga-titulo">Solicitar una prórroga</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <div class="modal-body">
+                    <p class="small">Tu límite de presentación actual es el <strong>@(Model.Linea is null ? "" : Formato.Fecha(Model.Linea.LimiteDeLaEmpresa))</strong>.</p>
+                    <div class="mb-3"><label class="form-label" for="pr-motivo">Motivo del pedido</label>
+                        <textarea class="form-control" id="pr-motivo" name="motivo" rows="4" minlength="10" maxlength="4000" required placeholder="Contanos por qué necesitás más tiempo."></textarea></div>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label" for="pr-hasta">Hasta cuándo pedís <span class="text-muted">(opcional)</span></label><input class="form-control" type="date" id="pr-hasta" name="hastaCuando" /></div>
+                        <div class="col-md-6"><label class="form-label" for="pr-archivo">Documento adjunto <span class="text-muted">(opcional)</span></label><input class="form-control" type="file" id="pr-archivo" name="archivo" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.zip" /></div>
+                    </div>
+                    <p class="form-text mt-3">La Subsecretaría recibe el pedido por mail. La respuesta va a aparecer en esta pantalla.</p>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary">Enviar pedido</button></div>
+            </form>
+        </div></div>
+    </div>
+}
 @section Scripts { <script src="~/js/comunicaciones.js" asp-append-version="true"></script> }

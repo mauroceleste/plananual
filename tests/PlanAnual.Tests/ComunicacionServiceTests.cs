@@ -129,7 +129,7 @@ public sealed class ComunicacionServiceTests : IDisposable
         Assert.Equal(general.AddDays(15), await svc.LimiteDeLaEmpresaAsync(ciclo, "111"));
         Assert.Equal(general, await svc.LimiteDeLaEmpresaAsync(ciclo, "222"));                          // otra empresa: el general
         Assert.Equal(pedido.Id, otorgada.RespondeA);                                                    // sin indicar a cuál, contesta el pedido pendiente
-        Assert.Equal("Respondida", (await svc.LineaDeTiempoAsync(Admin, ciclo, "111")).Movimientos.Single(m => m.Id == pedido.Id).Estado);
+        Assert.Equal("Resuelta", (await svc.LineaDeTiempoAsync(Admin, ciclo, "111")).Movimientos.Single(m => m.Id == pedido.Id).Estado);
     }
 
     [Fact]

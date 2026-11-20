@@ -13,7 +13,10 @@ public enum EstadoEmpresa { SinPresentar, EnCarga, Presentado, InformacionSolici
 /// <param name="Estado">Para notas con plazo: «Pendiente», «Vencida» o «Respondida». Null en el resto.</param>
 public sealed record MovimientoVm(
     long? Id, DateTime Fecha, string Tipo, string Titulo, string? Detalle, string Usuario, string Origen, string? Estado, DateOnly? PlazoHasta,
-    string? NumeroGde, string? NombreArea, bool Visible, string? AdjuntoNombre, long? AdjuntoId, bool MailEnviado, string? MailDestinatarios, string? MailError);
+    string? NumeroGde, string? NombreArea, bool Visible, string? AdjuntoNombre, long? AdjuntoId, bool MailEnviado, string? MailDestinatarios, string? MailError, bool PorLaEmpresa = false);
+
+/// <summary>Lo que necesita atención en una empresa: notas que esperan respuesta, prórrogas que la Subsecretaría tiene que resolver y respuestas que llegaron en la última semana.</summary>
+public sealed record ActividadEmpresa(int NotasSinRespuesta, int ProrrogasPorResolver, int RespuestasRecientes);
 
 public sealed record LineaDeTiempo(
     string Cuit, string RazonSocial, EstadoEmpresa Estado, DateOnly LimiteGeneral, DateOnly LimiteDeLaEmpresa, DateOnly? ProximoVencimiento,
@@ -69,15 +72,18 @@ public sealed class ComunicacionService(PlanAnualDbContext db, IMailSender mail,
 
         // Notas con plazo: pendientes hasta que alguien las contesta.
         var contestadas = registradas.Where(c => c.RespondeA != null).Select(c => c.RespondeA!.Value).ToHashSet();
-        string? EstadoDe(Comunicacion c) =>
-            c.Tipo is TipoComunicacion.NotaEnviada or TipoComunicacion.ProrrogaSolicitada && (c.PlazoHasta != null || c.Tipo == TipoComunicacion.ProrrogaSolicitada)
-                ? contestadas.Contains(c.Id) ? "Respondida" : c.PlazoHasta is { } p && p < hoy ? "Vencida" : "Pendiente"
-                : null;
+        // Una nota solo cuenta como pendiente si tiene plazo; un pedido de prórroga queda pendiente hasta que se resuelve (su fecha es la que pide la empresa, no un vencimiento).
+        string? EstadoDe(Comunicacion c) => c.Tipo switch
+        {
+            TipoComunicacion.NotaEnviada when c.PlazoHasta != null => contestadas.Contains(c.Id) ? "Respondida" : c.PlazoHasta < hoy ? "Vencida" : "Pendiente",
+            TipoComunicacion.ProrrogaSolicitada => contestadas.Contains(c.Id) ? "Resuelta" : "Pendiente",
+            _ => null,
+        };
 
         var mov = new List<MovimientoVm>();
         foreach (var c in registradas.Where(c => !esEmpresa || c.VisibleParaEmpresa))
             mov.Add(new(c.Id, c.Fecha, c.Tipo.ToString(), c.Asunto, c.Detalle, c.Usuario, "Registro", EstadoDe(c), c.PlazoHasta, c.NumeroGde, c.NombreArea, c.VisibleParaEmpresa,
-                c.AdjuntoNombre, c.AdjuntoNombre is null ? null : c.Id, c.MailEnviado, c.MailDestinatarios, c.MailError));
+                c.AdjuntoNombre, c.AdjuntoNombre is null ? null : c.Id, c.MailEnviado, c.MailDestinatarios, c.MailError, c.PorLaEmpresa));
 
         // Lo que el sistema ya sabe: los envíos del plan (todas las áreas enviadas juntas son un solo movimiento) y los pedidos de rectificación.
         foreach (var g in presentaciones.Where(p => p.EnviadaEn != null).GroupBy(p => (Minuto: new DateTime(p.EnviadaEn!.Value.Year, p.EnviadaEn.Value.Month, p.EnviadaEn.Value.Day, p.EnviadaEn.Value.Hour, p.EnviadaEn.Value.Minute, 0), p.Version)))
@@ -99,7 +105,7 @@ public sealed class ComunicacionService(PlanAnualDbContext db, IMailSender mail,
 
         var ordenados = mov.OrderByDescending(m => m.Fecha).ThenByDescending(m => m.Id ?? 0).ToList();
         var pendientes = registradas.Where(c => EstadoDe(c) is "Pendiente" or "Vencida").ToList();
-        var proximo = pendientes.Where(c => c.PlazoHasta != null).Select(c => c.PlazoHasta!.Value).OrderBy(d => d).Cast<DateOnly?>().FirstOrDefault();
+        var proximo = pendientes.Where(c => c.Tipo == TipoComunicacion.NotaEnviada && c.PlazoHasta != null).Select(c => c.PlazoHasta!.Value).OrderBy(d => d).Cast<DateOnly?>().FirstOrDefault();
 
         // Estado: lo último que se decidió, salvo que la empresa haya vuelto a presentar después.
         var ultimaPresentacion = presentaciones.Where(p => p.EnviadaEn != null).Select(p => p.EnviadaEn!.Value).DefaultIfEmpty().Max();
@@ -164,6 +170,8 @@ public sealed class ComunicacionService(PlanAnualDbContext db, IMailSender mail,
         {
             var origen = await db.Comunicaciones.AsNoTracking().FirstOrDefaultAsync(c => c.Id == resp && c.Cuit == cuit && c.CicloId == ciclo.Id);
             if (origen is null || origen.Tipo is not (TipoComunicacion.NotaEnviada or TipoComunicacion.ProrrogaSolicitada)) throw new OperacionInvalida("La nota a la que responde no existe.");
+            // Una nota de la Subsecretaría solo puede contestar un pedido de la empresa (por ejemplo, para denegar una prórroga).
+            if (r.Tipo == TipoComunicacion.NotaEnviada && origen.Tipo != TipoComunicacion.ProrrogaSolicitada) throw new OperacionInvalida("Una nota solo puede contestar un pedido de prórroga de la empresa.");
         }
 
         var c = new Comunicacion
@@ -215,6 +223,107 @@ public sealed class ComunicacionService(PlanAnualDbContext db, IMailSender mail,
         }
         if (enviarMail) await EnviarMailAsync(c, ciclo, destinatariosExtra, urlEmpresa);
         return c;
+    }
+
+    // ============================ La empresa responde desde el sistema ============================
+
+    static void SoloLaEmpresa(UsuarioSesion u, string cuit) { if (u.Rol != Rol.Empresa || !u.Cuits.Contains(cuit)) throw new UnauthorizedAccessException(); }
+
+    async Task<string> RazonSocialAsync(int cicloId, string cuit) =>
+        await db.Presentaciones.AsNoTracking().Where(p => p.CicloId == cicloId && p.Cuit == cuit).Select(p => p.RazonSocial).FirstOrDefaultAsync()
+        ?? await db.Comunicaciones.AsNoTracking().Where(c => c.Cuit == cuit).Select(c => c.RazonSocial).FirstOrDefaultAsync() ?? cuit;
+
+    static string? Recortar(string? t, int max) => t is null ? null : t.Length <= max ? t : t[..(max - 1)] + "…";
+
+    /// <summary>La empresa contesta una nota que le mandó la Subsecretaría: queda registrado, la nota pasa a «Respondida» y se avisa a la Subsecretaría.</summary>
+    public async Task<Comunicacion> ResponderAsync(UsuarioSesion u, Ciclo ciclo, string cuit, long notaId, string? detalle, string? numeroGde, string urlAdministracion,
+        string? adjuntoNombre = null, string? adjuntoRuta = null, long? adjuntoTamano = null, string? adjuntoSha256 = null)
+    {
+        SoloLaEmpresa(u, cuit);
+        var nota = await db.Comunicaciones.AsNoTracking().FirstOrDefaultAsync(c => c.Id == notaId && c.CicloId == ciclo.Id && c.Cuit == cuit && c.VisibleParaEmpresa && c.Tipo == TipoComunicacion.NotaEnviada)
+            ?? throw new OperacionInvalida("La nota no existe.");
+        if (await db.Comunicaciones.AnyAsync(c => c.RespondeA == notaId)) throw new OperacionInvalida("Esa nota ya fue respondida.");
+        var texto = detalle?.Trim() ?? "";
+        if (texto.Length < 10) throw new OperacionInvalida("Escribí la respuesta (al menos 10 caracteres).");
+        if (texto.Length > 4000) throw new OperacionInvalida("La respuesta es demasiado larga (máximo 4000 caracteres).");
+        var gde = string.IsNullOrWhiteSpace(numeroGde) ? null : numeroGde.Trim();
+        if (gde is { Length: > 80 }) throw new OperacionInvalida("El número de GDE es demasiado largo (máximo 80 caracteres).");
+
+        var c = new Comunicacion
+        {
+            CicloId = ciclo.Id, Cuit = cuit, RazonSocial = nota.RazonSocial, IdBloque = nota.IdBloque, NombreArea = nota.NombreArea, Fecha = DateTime.Now,
+            Tipo = TipoComunicacion.RespuestaEmpresa, Asunto = Recortar("Respuesta: " + nota.Asunto, 200)!, Detalle = texto, NumeroGde = gde, RespondeA = notaId,
+            VisibleParaEmpresa = true, PorLaEmpresa = true, UsuarioId = u.Id, Usuario = u.Nombre,
+            AdjuntoNombre = adjuntoNombre, AdjuntoRuta = adjuntoRuta, AdjuntoTamano = adjuntoTamano, AdjuntoSha256 = adjuntoSha256,
+        };
+        db.Comunicaciones.Add(c);
+        await db.SaveChangesAsync();
+        await AvisarALaSubsecretariaAsync(c, ciclo, "Respuesta de la empresa a la nota «" + nota.Asunto + "»", urlAdministracion);
+        return c;
+    }
+
+    /// <summary>La empresa pide una prórroga para presentar el plan. Queda pendiente hasta que Administración la otorga o la deniega.</summary>
+    public async Task<Comunicacion> SolicitarProrrogaAsync(UsuarioSesion u, Ciclo ciclo, string cuit, string? motivo, DateOnly? hastaCuando, string urlAdministracion,
+        string? adjuntoNombre = null, string? adjuntoRuta = null, long? adjuntoTamano = null, string? adjuntoSha256 = null)
+    {
+        SoloLaEmpresa(u, cuit);
+        var texto = motivo?.Trim() ?? "";
+        if (texto.Length < 10) throw new OperacionInvalida("Contanos el motivo del pedido (al menos 10 caracteres).");
+        if (texto.Length > 4000) throw new OperacionInvalida("El motivo es demasiado largo (máximo 4000 caracteres).");
+        var resueltas = (await db.Comunicaciones.AsNoTracking().Where(c => c.CicloId == ciclo.Id && c.Cuit == cuit && c.RespondeA != null).Select(c => c.RespondeA!.Value).ToListAsync()).ToHashSet();
+        var abiertas = await db.Comunicaciones.AsNoTracking().Where(c => c.CicloId == ciclo.Id && c.Cuit == cuit && c.Tipo == TipoComunicacion.ProrrogaSolicitada).Select(c => c.Id).ToListAsync();
+        if (abiertas.Any(id => !resueltas.Contains(id))) throw new OperacionInvalida("Ya tenés un pedido de prórroga pendiente: esperá la respuesta de la Subsecretaría.");
+        var limite = await LimiteDeLaEmpresaAsync(ciclo, cuit);
+        if (hastaCuando is { } h && h <= limite) throw new OperacionInvalida($"La fecha que pedís tiene que ser posterior a tu límite actual ({limite:dd/MM/yyyy}).");
+
+        var c = new Comunicacion
+        {
+            CicloId = ciclo.Id, Cuit = cuit, RazonSocial = await RazonSocialAsync(ciclo.Id, cuit), Fecha = DateTime.Now, Tipo = TipoComunicacion.ProrrogaSolicitada,
+            Asunto = "Solicitud de prórroga", Detalle = texto, PlazoHasta = hastaCuando, VisibleParaEmpresa = true, PorLaEmpresa = true, UsuarioId = u.Id, Usuario = u.Nombre,
+            AdjuntoNombre = adjuntoNombre, AdjuntoRuta = adjuntoRuta, AdjuntoTamano = adjuntoTamano, AdjuntoSha256 = adjuntoSha256,
+        };
+        db.Comunicaciones.Add(c);
+        await db.SaveChangesAsync();
+        await AvisarALaSubsecretariaAsync(c, ciclo, "Pedido de prórroga de la empresa", urlAdministracion);
+        return c;
+    }
+
+    /// <summary>Resumen por empresa para el listado de la Subsecretaría: notas sin respuesta, prórrogas por resolver y respuestas recibidas en la última semana.</summary>
+    public async Task<Dictionary<string, ActividadEmpresa>> ActividadPorEmpresaAsync(int cicloId)
+    {
+        var todas = await db.Comunicaciones.AsNoTracking().Where(c => c.CicloId == cicloId).Select(c => new { c.Id, c.Cuit, c.Tipo, c.RespondeA, c.Fecha, c.PorLaEmpresa, c.PlazoHasta }).ToListAsync();
+        var contestadas = todas.Where(c => c.RespondeA != null).Select(c => c.RespondeA!.Value).ToHashSet();
+        var semana = DateTime.Now.AddDays(-7);
+        return todas.GroupBy(c => c.Cuit).ToDictionary(g => g.Key, g => new ActividadEmpresa(
+            g.Count(c => c.Tipo == TipoComunicacion.NotaEnviada && c.PlazoHasta != null && !contestadas.Contains(c.Id)),
+            g.Count(c => c.Tipo == TipoComunicacion.ProrrogaSolicitada && !contestadas.Contains(c.Id)),
+            g.Count(c => c.Tipo == TipoComunicacion.RespuestaEmpresa && c.PorLaEmpresa && c.Fecha >= semana)));
+    }
+
+    /// <summary>Le avisa por mail a la Subsecretaría que la empresa escribió algo. Si el mail falla o no hay casilla configurada, lo de la empresa queda registrado igual.</summary>
+    async Task AvisarALaSubsecretariaAsync(Comunicacion c, Ciclo ciclo, string titulo, string urlAdministracion)
+    {
+        var para = cfg.Lista("Mail:Subsecretaria").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (para.Count == 0) return;
+        Func<string?, string> h = WebUtility.HtmlEncode!;
+        var plazo = c.PlazoHasta is { } p ? $"<p>Pide hasta el <strong>{p:dd/MM/yyyy}</strong>.</p>" : "";
+        var html = $"""
+            <div style="font-family:Segoe UI,Arial,sans-serif;color:#111C26;max-width:560px">
+            <h2 style="color:#00374C;margin:0 0 8px">{h(titulo)}</h2>
+            <p><strong>{h(c.RazonSocial)}</strong> · Plan de Inversiones {ciclo.Anio} · escrito por {h(c.Usuario)}</p>
+            <p style="white-space:pre-wrap">{h(c.Detalle)}</p>{plazo}
+            {(c.AdjuntoNombre is null ? "" : $"<p>Documento adjunto: <strong>{h(c.AdjuntoNombre)}</strong>.</p>")}
+            <p><a href="{h(urlAdministracion)}">Ver en el sistema</a></p>
+            <p style="color:#5F7185;font-size:12px">Subsecretaría de Hidrocarburos · Provincia del Neuquén. Este mensaje es automático.</p></div>
+            """;
+        try
+        {
+            var r = await mail.EnviarAsync(para, $"[Plan de Inversiones {ciclo.Anio}] {c.RazonSocial}: {titulo}", html);
+            c.MailEnviado = r.Error is null; c.MailError = r.Error is null ? null : Recortar(r.Error, 480);
+            c.MailDestinatarios = Recortar(string.Join("; ", r.Destinatarios) + (r.Desviado && r.Destinatarios.Count > 0 ? " (modo de prueba: no llegó a la Subsecretaría)" : ""), 990);
+        }
+        catch (Exception ex) { c.MailEnviado = false; c.MailError = Recortar(ex.Message, 480); }
+        await db.SaveChangesAsync();
     }
 
     // ============================ Mail ============================
